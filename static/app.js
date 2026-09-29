@@ -849,6 +849,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   setupLineageCanvasPan();
+  if (new URLSearchParams(window.location.search).get('drawer') === 'open') {
+    openDrawer();
+  }
   loadConfig();
   loadReport(false);
   loadLineage();
