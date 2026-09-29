@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.env.*
+*.key
+*.pem
+*credentials*.json
+*service-account*.json
+.DS_Store
+.vscode/
+.idea/
+*.log
