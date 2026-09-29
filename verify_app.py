@@ -81,6 +81,33 @@ def verify_live_engine() -> None:
   assert tts_res.get("status") == "OK" and len(tts_res.get("audio_base64", "")) > 1000
   assert "gemini-3.8-flash-tts" in tts_res.get("voice_name", "")
 
+  # Verify Item 5: Admin Telemetry & Adoption (6 Admin Questions + Privacy Toggle + X-Days Window)
+  ad_masked = rep.get("adoption_telemetry") or {}
+  assert ad_masked.get("days_window") == 30
+  assert ad_masked.get("include_unmasked") is False
+  sk = ad_masked.get("summary_kpis") or {}
+  assert sk.get("users_active_today", 0) >= 1
+  assert sk.get("users_active_window", 0) >= 3
+  assert sk.get("sessions_window", 0) >= 100
+  assert len(ad_masked["q1_active_users"]["active_users"]) >= 3
+  assert "***" in ad_masked["q1_active_users"]["active_users"][0]["display_principal"]
+  assert len(ad_masked["q2_top_apps"]["apps"]) >= 5
+  assert len(ad_masked["q3_top_agents"]["agents"]) >= 8
+  assert ad_masked["q4_non_users"]["total_non_users"] >= 15
+  assert ad_masked["q4_non_users"]["reclaimable_monthly_usd"] > 0
+  assert len(ad_masked["q5_license_capabilities"]["ecosystem_capabilities"]) >= 5
+  assert len(ad_masked["q5_license_capabilities"]["multimodal_tools_usage"]) >= 5
+  assert ad_masked["q6_prompt_intelligence"]["work_pct"] > 50.0
+  assert len(ad_masked["q6_prompt_intelligence"]["categories"]) >= 4
+
+  # Verify Unmasked Admin View & Custom 7-day Window
+  ad_unmasked = eng.compute_admin_adoption_telemetry(
+      engine_filter="ALL", days_window=7, include_unmasked=True
+  )
+  assert ad_unmasked["days_window"] == 7
+  assert ad_unmasked["include_unmasked"] is True
+  assert "***" not in ad_unmasked["q1_active_users"]["active_users"][0]["display_principal"]
+
   print(
       f"VERIFIED OK: {rep['kpis']['total_engines']} engines, "
       f"{rep['kpis']['total_agents']} agents (Lineage: {lin['counts']['agents']} agents / {len(lin['nodes'])} total nodes), "
@@ -88,6 +115,9 @@ def verify_live_engine() -> None:
       f"{mb['billing_info']['total_live_tokens']:,} live Cloud Monitoring tokens across {len(mb['by_model'])} models, "
       f"5 Executive Summary bullets ({nav_llm['generated_by']}), "
       f"Gemini Flash TTS audio ({tts_res['voice_name']}, {len(tts_res['audio_base64'])} bytes), "
+      f"Admin Adoption ({sk['users_active_today']} active today, {sk['users_active_window']} active 30d, "
+      f"{sk['sessions_window']} live sessions, {ad_masked['q3_top_agents']['distinct_agents_with_sessions']} active agents, "
+      f"{ad_masked['q6_prompt_intelligence']['work_pct']}% work prompts), "
       f"${rep['kpis']['total_spend_usd']} total spend."
   )
 
@@ -96,3 +126,4 @@ if __name__ == "__main__":
   root = os.path.dirname(os.path.abspath(__file__))
   verify_zero_forbidden_references_or_secrets(root)
   verify_live_engine()
+

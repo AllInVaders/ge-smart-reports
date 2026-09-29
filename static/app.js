@@ -1,4 +1,5 @@
 const state = {
+  activeMainTab: 'OVERVIEW',
   engineId: 'ALL',
   workstreamsSort: 'spend',
   deliverablesSort: 'spend',
@@ -10,6 +11,9 @@ const state = {
   billingTab: 'MODEL',
   billingSearch: '',
   revealPii: false,
+  adoptionDays: 30,
+  adoptionData: null,
+  adoptionCharts: {},
   reportData: null,
   narrativeData: null,
   lineageData: null,
@@ -86,10 +90,15 @@ async function loadReport(forceRefresh = false) {
 
   try {
     const url = `/api/report?engine_id=${encodeURIComponent(
-        state.engineId)}&refresh=${forceRefresh ? 'true' : 'false'}`;
+        state.engineId)}&days=${state.adoptionDays}&unmasked=${
+        state.revealPii ? 'true' : 'false'}&refresh=${
+        forceRefresh ? 'true' : 'false'}`;
     const res = await fetch(url);
     const data = await res.json();
     state.reportData = data;
+    if (data.adoption_telemetry) {
+      state.adoptionData = data.adoption_telemetry;
+    }
     if (!state.narrativeData || forceRefresh) {
       state.narrativeData = data.narrative_report || null;
     }
@@ -103,6 +112,7 @@ async function loadReport(forceRefresh = false) {
     renderDatastoresTable();
     renderAgentsTable();
     renderFrictionsAndUsers();
+    renderAdoptionTelemetry();
     prefetchDefaultTtsAudio();
   } finally {
     if (btn) btn.textContent = '↻ Refresh Live API';
@@ -1515,6 +1525,519 @@ async function saveConfigAndRecalculate() {
 }
 
 /* ==========================================================================
+   10B. PRIMARY VIEW TABS & ADMIN TELEMETRY / ADOPTION (6 ADMIN QUESTIONS)
+   ========================================================================== */
+function switchMainTab(tabName) {
+  const validTab = ['OVERVIEW', 'ADOPTION', 'ARCHITECTURE'].includes(tabName) ?
+      tabName :
+      'OVERVIEW';
+  state.activeMainTab = validTab;
+
+  document.querySelectorAll('#primaryViewTabs .view-tab-btn').forEach((btn) => {
+    const t = btn.getAttribute('data-main-tab');
+    const isActive = t === validTab;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  document.getElementById('mainTabOverview')
+      ?.classList.toggle('hidden', validTab !== 'OVERVIEW');
+  document.getElementById('mainTabAdoption')
+      ?.classList.toggle('hidden', validTab !== 'ADOPTION');
+  document.getElementById('mainTabArchitecture')
+      ?.classList.toggle('hidden', validTab !== 'ARCHITECTURE');
+
+  if (validTab === 'ADOPTION') {
+    renderAdoptionTelemetry();
+  } else if (validTab === 'OVERVIEW' && state.lineageData) {
+    fitLineageViewToContainer(false);
+    renderLineageCanvas();
+  }
+}
+
+async function fetchAdoptionWindow(days = state.adoptionDays, forceRefresh = false) {
+  const cleanDays = Math.min(Math.max(Number(days) || 30, 1), 365);
+  state.adoptionDays = cleanDays;
+
+  document.querySelectorAll('.adoption-day-btn').forEach((btn) => {
+    const btnDays = Number(btn.getAttribute('data-days'));
+    btn.classList.toggle('active', btnDays === cleanDays);
+  });
+
+  try {
+    const url = `/api/adoption?engine_id=${encodeURIComponent(
+        state.engineId)}&days=${cleanDays}&unmasked=${
+        state.revealPii ? 'true' : 'false'}&refresh=${
+        forceRefresh ? 'true' : 'false'}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    state.adoptionData = data;
+    renderAdoptionTelemetry();
+  } catch (e) {
+    showToast('Error actualizando ventana de adopción en vivo');
+  }
+}
+
+function renderOrUpdateChart(key, canvasId, config) {
+  if (typeof Chart === 'undefined') return;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (state.adoptionCharts[key]) {
+    state.adoptionCharts[key].destroy();
+  }
+  state.adoptionCharts[key] = new Chart(canvas.getContext('2d'), config);
+}
+
+function renderAdoptionTelemetry() {
+  const ad = state.adoptionData ||
+      (state.reportData && state.reportData.adoption_telemetry);
+  if (!ad) return;
+
+  const days = ad.days_window || state.adoptionDays || 30;
+  const sk = ad.summary_kpis || {};
+  const q1 = ad.q1_active_users || {};
+  const q2 = ad.q2_top_apps || {};
+  const q3 = ad.q3_top_agents || {};
+  const q4 = ad.q4_non_users || {};
+  const q5 = ad.q5_license_capabilities || {};
+  const q6 = ad.q6_prompt_intelligence || {};
+
+  // Update dynamic X-days labels
+  document.querySelectorAll('.adopt-days-label').forEach((el) => {
+    el.textContent = days;
+  });
+  const winPill = document.getElementById('adoptionWindowPill');
+  if (winPill) {
+    winPill.textContent = days === 1 ?
+        'Ventana: Hoy (Últimas 24h)' :
+        `Ventana: Últimos ${days} días`;
+  }
+
+  // Update Privacy toggle button label
+  const privBtn = document.getElementById('adoptionPrivacyToggleBtn');
+  if (privBtn) {
+    privBtn.textContent = state.revealPii ?
+        '🔓 Vista Completa de Admin (Clic para Enmascarar)' :
+        '🔒 Vista Enmascarada (Clic para Admin)';
+  }
+  const licBtn = document.getElementById('togglePiiBtn');
+  if (licBtn) {
+    licBtn.textContent = state.revealPii ? 'Mask Identities' : 'Reveal Identities';
+  }
+
+  // 6-Card Adoption Summary Strip
+  const activeTodayCount = q1.users_active_today_count ?? sk.users_active_today ?? 0;
+  const sessTodayCount = q1.sessions_today_count ?? sk.sessions_today ?? 0;
+  const turnsTodayCount = q1.turns_today_count ?? sk.turns_today ?? 0;
+
+  const activeWinCount = q1.users_active_window_count ?? sk.users_active_window ?? 0;
+  const sessWinCount = q1.sessions_window_count ?? sk.sessions_window ?? 0;
+  const turnsWinCount = q1.turns_window_count ?? sk.turns_window ?? 0;
+
+  const totalSeats = sk.total_licensed_seats || 1;
+  const totalPrincipals = sk.total_principals_tracked || 0;
+  const nonUsersCount = q4.total_non_users ?? sk.non_users_count ?? 0;
+  const seatAdoptionPct = Math.round((activeWinCount / Math.max(totalPrincipals, 1)) * 100);
+
+  const kpiTodayUsers = document.getElementById('adoptKpiTodayUsers');
+  if (kpiTodayUsers) {
+    kpiTodayUsers.textContent = `${fmtNum(activeTodayCount)} Usuarios`;
+  }
+  const kpiTodaySub = document.getElementById('adoptKpiTodaySub');
+  if (kpiTodaySub) {
+    kpiTodaySub.textContent =
+        `${fmtNum(sessTodayCount)} sesiones • ${fmtNum(turnsTodayCount)} consultas hoy`;
+  }
+
+  const kpiWinLabel = document.getElementById('adoptKpiWindowUsersLabel');
+  if (kpiWinLabel) {
+    kpiWinLabel.textContent = `Usuarios Activos (${days}d)`;
+  }
+  const kpiWinUsers = document.getElementById('adoptKpiWindowUsers');
+  if (kpiWinUsers) {
+    kpiWinUsers.textContent = `${fmtNum(activeWinCount)} Usuarios`;
+  }
+  const kpiWinSub = document.getElementById('adoptKpiWindowSub');
+  if (kpiWinSub) {
+    kpiWinSub.textContent =
+        `${fmtNum(sessWinCount)} sesiones • ${fmtNum(turnsWinCount)} turnos (${days}d)`;
+  }
+
+  const kpiSeatRate = document.getElementById('adoptKpiSeatRate');
+  if (kpiSeatRate) {
+    kpiSeatRate.textContent = `${seatAdoptionPct}% (${activeWinCount}/${totalPrincipals})`;
+  }
+  const kpiSeatSub = document.getElementById('adoptKpiSeatSub');
+  if (kpiSeatSub) {
+    kpiSeatSub.textContent =
+        `${totalSeats} licencias activas • ${nonUsersCount} sin uso en ${days}d`;
+  }
+
+  const appsList = q2.apps || [];
+  const activeAppsCount = appsList.filter((a) => a.sessions_window > 0).length;
+  const totalAllTimeSess = appsList.reduce((s, a) => s + (a.sessions_all_time || 0), 0);
+  const kpiActiveApps = document.getElementById('adoptKpiActiveApps');
+  if (kpiActiveApps) {
+    kpiActiveApps.textContent = `${activeAppsCount} / ${appsList.length} Apps`;
+  }
+  const kpiActiveAppsSub = document.getElementById('adoptKpiActiveAppsSub');
+  if (kpiActiveAppsSub) {
+    kpiActiveAppsSub.textContent =
+        `${fmtNum(totalAllTimeSess)} sesiones históricas registradas`;
+  }
+
+  const totalRegAgents = (state.reportData && state.reportData.kpis && state.reportData.kpis.total_agents) || 119;
+  const distinctAgentsUsed = q3.distinct_agents_with_sessions ?? sk.distinct_agents_used_window ?? 0;
+  const kpiActiveAgents = document.getElementById('adoptKpiActiveAgents');
+  if (kpiActiveAgents) {
+    kpiActiveAgents.textContent =
+        `${fmtNum(distinctAgentsUsed)} / ${fmtNum(totalRegAgents)}`;
+  }
+  const kpiActiveAgentsSub = document.getElementById('adoptKpiActiveAgentsSub');
+  if (kpiActiveAgentsSub) {
+    kpiActiveAgentsSub.textContent = 'Agentes con sesiones reales en ventana';
+  }
+
+  const kpiWorkRatio = document.getElementById('adoptKpiWorkRatio');
+  if (kpiWorkRatio) {
+    kpiWorkRatio.textContent = `${q6.work_pct ?? 0}% Laboral`;
+  }
+  const kpiWorkSub = document.getElementById('adoptKpiWorkSub');
+  if (kpiWorkSub) {
+    kpiWorkSub.textContent =
+        `${fmtNum(q6.work_sessions_count)} trabajo vs. ${fmtNum(q6.other_sessions_count)} otros fines`;
+  }
+
+  // Q1 Table & Daily Activity Chart
+  const q1Tbody = document.getElementById('adoptQ1UsersTableBody');
+  if (q1Tbody) {
+    const users = q1.active_users || [];
+    q1Tbody.innerHTML = users
+        .map((u) => {
+          const todayBadge = u.is_active_today ?
+              `<span class="status-pill status-active">● ${u.status_badge || 'ACTIVO HOY'}</span>` :
+              `<span class="status-pill status-private">${u.status_badge || `ACTIVO (${days}D)`}</span>`;
+          const appsUsed = (u.top_apps || [])
+              .map((a) => `<span class="user-mini-chip">${a}</span>`)
+              .join(' ');
+          const agsUsed = (u.top_agents || []).slice(0, 3)
+              .map((ag) => `<span class="user-mini-chip">${ag}</span>`)
+              .join(' ');
+          return `
+        <tr>
+          <td>
+            <code>${u.display_principal}</code>
+            <div class="muted" style="font-size: 11px;">${u.subscription_tier || 'SEARCH_AND_ASSISTANT'}</div>
+          </td>
+          <td>${todayBadge}</td>
+          <td><strong>${fmtNum(u.turns_today)}</strong> turnos (${fmtNum(u.sessions_today)} ses.)</td>
+          <td><strong>${fmtNum(u.total_sessions_window)}</strong> <span class="muted">(${fmtNum(u.interactive_sessions_window)} int / ${fmtNum(u.scheduled_sessions_window)} prog)</span></td>
+          <td><strong>${fmtNum(u.total_turns_window)}</strong> (${u.usage_share_pct}%)</td>
+          <td><div class="user-chip-list">${agsUsed || '<span class="muted">-</span>'}</div></td>
+          <td><div class="user-chip-list">${appsUsed || '<span class="muted">-</span>'}</div></td>
+          <td>${u.last_login_fmt}</td>
+        </tr>
+      `;
+        })
+        .join('');
+  }
+
+  const daily = q1.daily_series || [];
+  renderOrUpdateChart('dailyActivity', 'adoptDailyActivityChart', {
+    type: 'bar',
+    data: {
+      labels: daily.map((d) => (d.date || '').slice(5)),
+      datasets: [
+        {
+          label: 'Turnos / Consultas',
+          data: daily.map((d) => d.turns || 0),
+          backgroundColor: 'rgba(26, 115, 232, 0.78)',
+          borderRadius: 4,
+        },
+        {
+          label: 'Sesiones Totales',
+          data: daily.map((d) => d.total_sessions || 0),
+          backgroundColor: 'rgba(0, 137, 123, 0.82)',
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {position: 'top'}},
+      scales: {
+        y: {beginAtZero: true, ticks: {precision: 0}},
+      },
+    },
+  });
+
+  // Q2: Top Applications Chart & Table
+  const topApps = (q2.apps || []).slice(0, 8);
+  renderOrUpdateChart('topApps', 'adoptTopAppsChart', {
+    type: 'bar',
+    data: {
+      labels: topApps.map((a) => a.display_name || a.engine_id),
+      datasets: [
+        {
+          label: `Turnos (${days}d)`,
+          data: topApps.map((a) => a.turns_window || 0),
+          backgroundColor: '#1a73e8',
+          borderRadius: 4,
+        },
+        {
+          label: `Sesiones (${days}d)`,
+          data: topApps.map((a) => a.sessions_window || 0),
+          backgroundColor: '#00897b',
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {position: 'top'}},
+      scales: {x: {beginAtZero: true}},
+    },
+  });
+
+  const q2Tbody = document.getElementById('adoptQ2AppsTableBody');
+  if (q2Tbody) {
+    q2Tbody.innerHTML = (q2.apps || [])
+        .map((a) => {
+          const usrChips = (a.active_users || [])
+              .map((u) => `<span class="user-mini-chip">${u}</span>`)
+              .join(' ');
+          return `
+        <tr>
+          <td>
+            <span class="gcp-link-name">${a.display_name}</span>
+            <div class="muted" style="font-size: 11px;"><code>${a.engine_id}</code></div>
+          </td>
+          <td><strong>${fmtNum(a.sessions_window)}</strong> <span class="muted">(${fmtNum(a.sessions_all_time)} hist.)</span></td>
+          <td><strong>${fmtNum(a.turns_window)}</strong> (${a.session_share_pct}%)</td>
+          <td>${fmtNum(a.agents_count)} (${fmtNum(a.enabled_agents_count)} activos)</td>
+          <td><div class="user-chip-list">${usrChips || '<span class="muted">Sin sesiones</span>'}</div></td>
+        </tr>
+      `;
+        })
+        .join('');
+  }
+
+  // Q3: Top Agents Chart & Table
+  const topAgents = (q3.agents || []).slice(0, 8);
+  renderOrUpdateChart('topAgents', 'adoptTopAgentsChart', {
+    type: 'bar',
+    data: {
+      labels: topAgents.map((ag) => (ag.agent_display_name || '').slice(0, 26)),
+      datasets: [
+        {
+          label: `Sesiones (${days}d)`,
+          data: topAgents.map((ag) => ag.sessions_window || 0),
+          backgroundColor: '#1e8e3e',
+          borderRadius: 4,
+        },
+        {
+          label: `Turnos (${days}d)`,
+          data: topAgents.map((ag) => ag.turns_window || 0),
+          backgroundColor: '#1a73e8',
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {position: 'top'}},
+      scales: {x: {beginAtZero: true}},
+    },
+  });
+
+  const q3Tbody = document.getElementById('adoptQ3AgentsTableBody');
+  if (q3Tbody) {
+    q3Tbody.innerHTML = (q3.agents || []).slice(0, 25)
+        .map((ag) => {
+          const usrChips = (ag.active_users || [])
+              .map((u) => `<span class="user-mini-chip">${u}</span>`)
+              .join(' ');
+          return `
+        <tr>
+          <td>
+            <span class="gcp-link-name">${ag.agent_display_name}</span>
+            <div class="muted" style="font-size: 11px;"><code>${ag.model_id}</code> • Último uso: ${ag.last_used_fmt}</div>
+          </td>
+          <td><span class="status-pill status-private">${ag.subtype}</span></td>
+          <td>${ag.engine_name}</td>
+          <td><strong>${fmtNum(ag.turns_window)}</strong> (${fmtNum(ag.sessions_window)} ses.)</td>
+          <td>${ag.session_share_pct}%</td>
+          <td><div class="user-chip-list">${usrChips || '<span class="muted">-</span>'}</div></td>
+        </tr>
+      `;
+        })
+        .join('');
+  }
+
+  // Q4: Non-Users & License Reclaim
+  const savBadge = document.getElementById('adoptDormantSavingsBadge');
+  if (savBadge) {
+    savBadge.textContent = `$${fmtUsd(q4.reclaimable_monthly_usd)}/mes ($${fmtUsd(q4.reclaimable_annual_usd)}/año) recuperables`;
+  }
+  const q4Callout = document.getElementById('adoptQ4SummaryCallout');
+  if (q4Callout) {
+    const cc = q4.cohort_counts || {};
+    q4Callout.innerHTML = `
+      <strong>Diagnóstico de Adopción de Licencias:</strong> De <strong>${
+        totalPrincipals}</strong> usuarios en <code>default_user_store</code>,
+      <strong>${activeWinCount}</strong> registraron actividad en los últimos ${days} días y
+      <strong>${q4.total_non_users || 0}</strong> no presentan actividad en la ventana
+      (<strong>${cc.NEVER_LOGGED_IN || 0}</strong> nunca ingresaron,
+      <strong>${cc.DORMANT_OVER_WINDOW || 0}</strong> inactivos &gt;${days}d,
+      <strong>${cc.EXPIRED_LICENSE || 0}</strong> trial vencido,
+      <strong>${cc.UNLICENSED_ATTEMPT || 0}</strong> intento sin licencia).
+    `;
+  }
+  const q4Tbody = document.getElementById('adoptQ4NonUsersTableBody');
+  if (q4Tbody) {
+    const nonUsers = q4.non_users || [];
+    q4Tbody.innerHTML = nonUsers
+        .map((u) => {
+          const stClass = u.assignment_state === 'ASSIGNED' ?
+              'status-disabled' :
+              'status-error';
+          return `
+        <tr>
+          <td><code>${u.display_principal}</code></td>
+          <td><span class="status-pill ${stClass}">${u.assignment_state} (${u.license_state})</span></td>
+          <td>${u.days_since_login !== null && u.days_since_login !== undefined ? `${u.days_since_login} días (${u.last_login_fmt})` : 'Nunca'}</td>
+          <td>${u.cohort_label}</td>
+          <td><strong>$${fmtUsd(u.monthly_seat_cost_usd)}/mes</strong></td>
+          <td>${u.recommended_action}</td>
+        </tr>
+      `;
+        })
+        .join('');
+  }
+
+  // Q5: Other License & Ecosystem Capabilities (Gemini Code Assist, Google Antigravity / ADK, etc.)
+  const q5Grid = document.getElementById('adoptQ5CapabilitiesGrid');
+  if (q5Grid) {
+    const caps = q5.ecosystem_capabilities || [];
+    const tools = (q5.multimodal_tools_usage || []).slice(0, 3);
+    const capsHtml = caps
+        .map((c) => {
+          const stPill = c.status === 'ACTIVE' ?
+              `<span class="status-pill status-active">● ${c.status_label}</span>` :
+              `<span class="status-pill status-disabled">◐ ${c.status_label}</span>`;
+          return `
+        <div class="capability-item-card">
+          <div class="capability-item-top">
+            <span class="capability-item-title">${c.name}</span>
+            ${stPill}
+          </div>
+          <div class="capability-item-metric">${c.active_seats_or_units}</div>
+          <div class="capability-item-detail">${c.usage_telemetry}</div>
+          <div class="capability-item-detail"><strong>Fuente:</strong> <code>${c.evidence_source}</code></div>
+        </div>
+      `;
+        })
+        .join('');
+    const toolsSummary = tools
+        .map((t) => `<span class="user-mini-chip">${t.display_name}: ${t.turns_enabled_count} turnos (${t.adoption_pct}%)</span>`)
+        .join(' ');
+    const toolsCardHtml = `
+      <div class="capability-item-card">
+        <div class="capability-item-top">
+          <span class="capability-item-title">Herramientas Multimodales y Grounding en Sesiones</span>
+          <span class="status-pill status-active">● En Uso Activo</span>
+        </div>
+        <div class="capability-item-metric">${tools.length} Capacidades de Asistente Habilitadas</div>
+        <div class="capability-item-detail">Uso real detectado en turnos de conversación (Imagen 3, Veo, Google Search Grounding, RAG Empresarial, Agent Tool Registry):</div>
+        <div class="user-chip-list" style="margin-top: 4px;">${toolsSummary}</div>
+      </div>
+    `;
+    q5Grid.innerHTML = capsHtml + toolsCardHtml;
+  }
+
+  // Q6: Prompt Intelligence (Work vs Non-Work & Category Taxonomy + Table)
+  const totalPromptsAnalyzed = (q6.work_sessions_count || 0) + (q6.other_sessions_count || 0);
+  const q6Badge = document.getElementById('adoptQ6TotalBadge');
+  if (q6Badge) {
+    q6Badge.textContent = `${fmtNum(totalPromptsAnalyzed)} Prompts Analizados (${days}d)`;
+  }
+
+  renderOrUpdateChart('workIntent', 'adoptWorkIntentChart', {
+    type: 'doughnut',
+    data: {
+      labels: [
+        `Fines de Trabajo (${q6.work_pct || 0}%)`,
+        `Otros Fines / General (${q6.other_pct || 0}%)`,
+      ],
+      datasets: [
+        {
+          data: [q6.work_sessions_count || 0, q6.other_sessions_count || 0],
+          backgroundColor: ['#1e8e3e', '#f9ab00'],
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {position: 'right'}},
+    },
+  });
+
+  const cats = q6.categories || [];
+  renderOrUpdateChart('promptCategories', 'adoptPromptCategoryChart', {
+    type: 'bar',
+    data: {
+      labels: cats.map((c) => c.category),
+      datasets: [
+        {
+          label: 'Sesiones por Categoría',
+          data: cats.map((c) => c.sessions_count || 0),
+          backgroundColor: '#1a73e8',
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {display: false}},
+      scales: {x: {beginAtZero: true, ticks: {precision: 0}}},
+    },
+  });
+
+  const q6Tbody = document.getElementById('adoptQ6PromptsTableBody');
+  if (q6Tbody) {
+    const prompts = q6.recent_prompts || [];
+    q6Tbody.innerHTML = prompts
+        .map((p) => {
+          const isWork = p.purpose === 'WORK';
+          const clPill = isWork ?
+              `<span class="status-pill status-active">✓ ${p.purpose_label}</span>` :
+              `<span class="status-pill status-disabled">○ ${p.purpose_label}</span>`;
+          return `
+        <tr>
+          <td style="white-space: nowrap;">${p.start_time_fmt}</td>
+          <td><code>${p.agent_display_name}</code></td>
+          <td>${p.engine_name}</td>
+          <td><strong>${p.prompt_text}</strong></td>
+          <td>${clPill}</td>
+          <td><span class="status-pill status-private">${p.category}</span></td>
+          <td><span class="status-pill status-active">${p.turns_count} turno(s) • ${p.trigger_type}</span></td>
+        </tr>
+      `;
+        })
+        .join('');
+  }
+}
+
+/* ==========================================================================
    11. INITIALIZE EVENT LISTENERS
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
@@ -1535,9 +2058,47 @@ document.addEventListener('DOMContentLoaded', () => {
   drawer?.addEventListener('click', (e) => {
     if (e.target === drawer) closeDrawer();
   });
-  document.querySelectorAll('.drawer-nav-link').forEach((link) => {
-    link.addEventListener('click', closeDrawer);
+
+  // Primary View Tabs switching
+  document.querySelectorAll('#primaryViewTabs .view-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.getAttribute('data-main-tab') || 'OVERVIEW';
+      switchMainTab(targetTab);
+    });
   });
+
+  // Burger menu links: switch tab first if data-target-tab is set, then scroll to section
+  document.querySelectorAll('.drawer-nav-link').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      const targetTab = link.getAttribute('data-target-tab');
+      if (targetTab) {
+        switchMainTab(targetTab);
+      }
+      closeDrawer();
+    });
+  });
+
+  // Adoption X-days buttons & custom input
+  document.querySelectorAll('.adoption-day-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const d = Number(btn.getAttribute('data-days')) || 30;
+      fetchAdoptionWindow(d, false);
+    });
+  });
+
+  document.getElementById('adoptionApplyDaysBtn')
+      ?.addEventListener('click', () => {
+        const val = Number(
+            document.getElementById('adoptionCustomDaysInput')?.value || 30);
+        fetchAdoptionWindow(val, false);
+      });
+
+  document.getElementById('adoptionPrivacyToggleBtn')
+      ?.addEventListener('click', () => {
+        state.revealPii = !state.revealPii;
+        renderFrictionsAndUsers();
+        fetchAdoptionWindow(state.adoptionDays, false);
+      });
 
   document.getElementById('saveConfigBtn')
       ?.addEventListener('click', saveConfigAndRecalculate);
@@ -1562,6 +2123,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ?.addEventListener('click', toggleTtsPlayback);
   document.getElementById('headerTtsBtn')
       ?.addEventListener('click', () => {
+        switchMainTab('OVERVIEW');
         document.getElementById('section-narrative')
             ?.scrollIntoView({behavior: 'smooth', block: 'start'});
         toggleTtsPlayback();
@@ -1708,16 +2270,20 @@ document.addEventListener('DOMContentLoaded', () => {
         renderLineageCanvas();
       });
 
-  document.getElementById('togglePiiBtn')?.addEventListener('click', (e) => {
+  document.getElementById('togglePiiBtn')?.addEventListener('click', () => {
     state.revealPii = !state.revealPii;
-    e.currentTarget.textContent =
-        state.revealPii ? 'Mask Identities' : 'Reveal Identities';
     renderFrictionsAndUsers();
+    fetchAdoptionWindow(state.adoptionDays, false);
   });
 
   setupLineageCanvasPan();
-  if (new URLSearchParams(window.location.search).get('drawer') === 'open') {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('drawer') === 'open') {
     openDrawer();
+  }
+  const initTab = (urlParams.get('tab') || '').toUpperCase();
+  if (['OVERVIEW', 'ADOPTION', 'ARCHITECTURE'].includes(initTab)) {
+    switchMainTab(initTab);
   }
   loadConfig();
   loadReport(false);

@@ -30,7 +30,7 @@ if HAS_FASTAPI:
           "Open-source, 100% live Discovery Engine API, Cloud Monitoring Token Billing,"
           " Natural Language Executive Summary (gemini-3.8-flash), TTS (gemini-3.8-flash-tts) & Lineage Reporting Dashboard."
       ),
-      version="3.2.0",
+      version="3.3.0",
   )
   app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -43,7 +43,7 @@ if HAS_FASTAPI:
     return JSONResponse({
         "status": "ok",
         "project_id": engine.project_id,
-        "version": "3.2.0",
+        "version": "3.3.0",
     })
 
   @app.get("/api/report")
@@ -53,6 +53,21 @@ if HAS_FASTAPI:
   ) -> JSONResponse:
     data = engine.compute_expense_and_telemetry(
         engine_filter=engine_id, force_refresh=refresh
+    )
+    return JSONResponse(data)
+
+  @app.get("/api/adoption")
+  async def api_adoption(
+      engine_id: str = Query(default="ALL"),
+      days: int = Query(default=30),
+      unmasked: bool = Query(default=False),
+      refresh: bool = Query(default=False),
+  ) -> JSONResponse:
+    data = engine.compute_admin_adoption_telemetry(
+        engine_filter=engine_id,
+        days_window=days,
+        include_unmasked=unmasked,
+        force_refresh=refresh,
     )
     return JSONResponse(data)
 
@@ -123,7 +138,7 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
 
     if path == "/api/health":
       self._send_json(
-          {"status": "ok", "project_id": engine.project_id, "version": "3.2.0"}
+          {"status": "ok", "project_id": engine.project_id, "version": "3.3.0"}
       )
       return
     if path == "/api/report":
@@ -132,6 +147,23 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
       self._send_json(
           engine.compute_expense_and_telemetry(
               engine_filter=eid, force_refresh=ref
+          )
+      )
+      return
+    if path == "/api/adoption":
+      eid = (qs.get("engine_id") or ["ALL"])[0]
+      try:
+        days = int((qs.get("days") or ["30"])[0])
+      except ValueError:
+        days = 30
+      unmasked = (qs.get("unmasked") or ["false"])[0].lower() == "true"
+      ref = (qs.get("refresh") or ["false"])[0].lower() == "true"
+      self._send_json(
+          engine.compute_admin_adoption_telemetry(
+              engine_filter=eid,
+              days_window=days,
+              include_unmasked=unmasked,
+              force_refresh=ref,
           )
       )
       return

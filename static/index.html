@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <!-- Left Burger Menu Configuration & "Understand Expense" Drawer -->
@@ -29,14 +30,16 @@
         <div class="drawer-section">
           <div class="drawer-section-title">Quick Navigation</div>
           <nav class="drawer-nav">
-            <a href="#section-kpis" class="drawer-nav-link">📊 Overview &amp; KPIs</a>
-            <a href="#section-narrative" class="drawer-nav-link">✨ Executive Summary &amp; TTS</a>
-            <a href="#section-charts" class="drawer-nav-link">📈 Workstreams &amp; Deliverables</a>
-            <a href="#section-model-billing" class="drawer-nav-link">🪙 Token Billing (Model/Agent)</a>
-            <a href="#section-lineage-graph" class="drawer-nav-link">🕸️ 122-Agent Lineage Graph</a>
-            <a href="#section-datastores" class="drawer-nav-link">🗄️ Connected Data Stores</a>
-            <a href="#section-agents" class="drawer-nav-link">🤖 Registered Agents (122)</a>
-            <a href="#section-frictions" class="drawer-nav-link">⚠️ Live API Frictions &amp; Users</a>
+            <a href="#section-kpis" data-target-tab="OVERVIEW" class="drawer-nav-link">📊 Overview &amp; KPIs</a>
+            <a href="#section-narrative" data-target-tab="OVERVIEW" class="drawer-nav-link">✨ Executive Summary &amp; TTS</a>
+            <a href="#section-charts" data-target-tab="OVERVIEW" class="drawer-nav-link">📈 Workstreams &amp; Deliverables</a>
+            <a href="#section-model-billing" data-target-tab="OVERVIEW" class="drawer-nav-link">🪙 Token Billing (Model/Agent)</a>
+            <a href="#section-lineage-graph" data-target-tab="OVERVIEW" class="drawer-nav-link">🕸️ 122-Agent Lineage Graph</a>
+            <a href="#section-datastores" data-target-tab="OVERVIEW" class="drawer-nav-link">🗄️ Connected Data Stores</a>
+            <a href="#section-agents" data-target-tab="OVERVIEW" class="drawer-nav-link">🤖 Registered Agents (122)</a>
+            <a href="#section-frictions" data-target-tab="OVERVIEW" class="drawer-nav-link">⚠️ Live API Frictions &amp; Users</a>
+            <a href="#section-admin-adoption" data-target-tab="ADOPTION" class="drawer-nav-link">👥 Telemetría y Adopción (Admin)</a>
+            <a href="#section-architecture" data-target-tab="ARCHITECTURE" class="drawer-nav-link">🏗️ Solution Architecture</a>
           </nav>
         </div>
 
@@ -160,7 +163,7 @@
             <h1>Gemini Enterprise Smart Reports</h1>
             <span id="projectBadge" class="project-pill">Loading project...</span>
           </div>
-          <p id="headerMetaSub" class="header-sub">Live Discovery Engine v1alpha, Cloud Monitoring Token Billing, AI Recommendations &amp; Full Lineage</p>
+          <p id="headerMetaSub" class="header-sub">Live Discovery Engine v1alpha, Cloud Monitoring Token Billing, Admin Adoption &amp; Conceptual Architecture</p>
         </div>
       </div>
 
@@ -179,6 +182,29 @@
   </header>
 
   <main class="container">
+    <!-- Primary View Tab Navigation Bar -->
+    <nav class="primary-view-tabs" id="primaryViewTabs" aria-label="Primary Dashboard Views">
+      <button class="primary-tab-btn active" data-main-tab="OVERVIEW" id="tabBtnOverview">
+        <span class="tab-icon">📊</span>
+        <span class="tab-title">Executive &amp; Operations Overview</span>
+        <span class="tab-pill" id="tabBadgeOverview">Live Telemetry</span>
+      </button>
+      <button class="primary-tab-btn" data-main-tab="ADOPTION" id="tabBtnAdoption">
+        <span class="tab-icon">👥</span>
+        <span class="tab-title">Telemetría y Adopción (Admin)</span>
+        <span class="tab-pill tab-pill-blue" id="tabBadgeAdoption">6 Admin Insights</span>
+      </button>
+      <button class="primary-tab-btn" data-main-tab="ARCHITECTURE" id="tabBtnArchitecture">
+        <span class="tab-icon">🏗️</span>
+        <span class="tab-title">Solution Architecture</span>
+        <span class="tab-pill tab-pill-teal">Conceptual</span>
+      </button>
+    </nav>
+
+    <!-- =========================================================================
+         TAB 1: EXECUTIVE & OPERATIONS OVERVIEW
+         ========================================================================= -->
+    <div id="mainTabOverview" class="main-tab-panel">
     <!-- 1. KPI Summary Strip -->
     <section id="section-kpis" class="kpi-grid">
       <div class="kpi-card">
@@ -650,6 +676,492 @@
         </div>
       </div>
     </section>
+    </div><!-- /#mainTabOverview -->
+
+    <!-- =================================================================== -->
+    <!-- TAB 2: TELEMETRÍA Y ADOPCIÓN (ADMIN) - 6 PREGUNTAS DEL ADMINISTRADOR -->
+    <!-- =================================================================== -->
+    <div id="mainTabAdoption" class="main-tab-panel hidden">
+      <section id="section-admin-adoption" class="card adoption-hero-card">
+        <div class="adoption-hero-header">
+          <div>
+            <div class="narrative-eyebrow">
+              <span class="ai-sparkle-badge">ADMIN TELEMETRY &amp; ADOPTION</span>
+              <span id="adoptionWindowPill" class="model-pill">Ventana: Últimos 30 días</span>
+              <span class="tts-voice-pill">100% Live GCP APIs</span>
+            </div>
+            <h2>Telemetría de Adopción, Uso de Licencias e Inteligencia de Prompts</h2>
+            <p class="card-sub">Respuestas en tiempo real a las 6 preguntas clave del Administrador sobre usuarios activos, aplicaciones, agentes, asientos inactivos, ecosistema e intención de prompts.</p>
+          </div>
+          <div class="adoption-controls-bar">
+            <div class="adoption-days-group" role="group" aria-label="Ventana de tiempo en días">
+              <span class="control-label">Ventana (X días):</span>
+              <button type="button" class="chip-btn adoption-day-btn" data-days="1">Hoy (1d)</button>
+              <button type="button" class="chip-btn adoption-day-btn" data-days="7">7d</button>
+              <button type="button" class="chip-btn adoption-day-btn" data-days="14">14d</button>
+              <button type="button" class="chip-btn adoption-day-btn active" data-days="30">30d</button>
+              <button type="button" class="chip-btn adoption-day-btn" data-days="90">90d</button>
+              <button type="button" class="chip-btn adoption-day-btn" data-days="180">180d</button>
+              <button type="button" class="chip-btn adoption-day-btn" data-days="365">365d</button>
+              <div class="adoption-custom-days">
+                <input type="number" id="adoptionCustomDaysInput" min="1" max="365" placeholder="X días" aria-label="Días personalizados" />
+                <button type="button" id="adoptionApplyDaysBtn" class="btn btn-secondary btn-sm">Aplicar</button>
+              </div>
+            </div>
+            <button type="button" id="adoptionPrivacyToggleBtn" class="btn btn-secondary btn-sm">
+              🔒 Vista Enmascarada (Clic para Admin)
+            </button>
+          </div>
+        </div>
+
+        <!-- 6-Card Adoption Summary Strip -->
+        <div class="kpi-grid adoption-kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Usuarios Activos Hoy (24h)</span>
+              <span class="kpi-dot dot-blue"></span>
+            </div>
+            <div class="kpi-value" id="adoptKpiTodayUsers">—</div>
+            <div class="kpi-sub" id="adoptKpiTodaySub">— sesiones / — consultas hoy</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label" id="adoptKpiWindowUsersLabel">Usuarios Activos (30d)</span>
+              <span class="kpi-dot dot-green"></span>
+            </div>
+            <div class="kpi-value" id="adoptKpiWindowUsers">—</div>
+            <div class="kpi-sub" id="adoptKpiWindowSub">— sesiones / — turnos en ventana</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Tasa de Adopción de Licencias</span>
+              <span class="kpi-dot dot-cyan"></span>
+            </div>
+            <div class="kpi-value" id="adoptKpiSeatRate">—%</div>
+            <div class="kpi-sub" id="adoptKpiSeatSub">— activos vs. — sin uso</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Apps Activas / Total</span>
+              <span class="kpi-dot dot-yellow"></span>
+            </div>
+            <div class="kpi-value" id="adoptKpiActiveApps">—</div>
+            <div class="kpi-sub" id="adoptKpiActiveAppsSub">Motores con sesiones registradas</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Agentes Utilizados</span>
+              <span class="kpi-dot dot-purple"></span>
+            </div>
+            <div class="kpi-value" id="adoptKpiActiveAgents">—</div>
+            <div class="kpi-sub" id="adoptKpiActiveAgentsSub">Agentes con actividad e invocaciones</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-label">Prompts de Trabajo (Laboral)</span>
+              <span class="kpi-dot dot-green"></span>
+            </div>
+            <div class="kpi-value" id="adoptKpiWorkRatio">—%</div>
+            <div class="kpi-sub" id="adoptKpiWorkSub">— laborales / — otros fines</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PREGUNTA 1: ¿Qué usuarios están usando Gemini Enterprise hoy? ¿Cuánto? ¿Y en los últimos X días? -->
+      <section class="card adoption-question-card" id="adoption-q1">
+        <div class="card-header">
+          <div>
+            <div class="question-badge-row">
+              <span class="question-number-pill">Pregunta 1</span>
+              <span class="table-badge">Identidades + Sesiones en Vivo</span>
+            </div>
+            <h2>¿Qué usuarios están usando Gemini Enterprise hoy? ¿Cuánto? ¿Y en los últimos <span class="adopt-days-label">30</span> días?</h2>
+            <p class="card-sub">Desglose por usuario de inicios de sesión, sesiones conversacionales, consultas/turnos hoy y en la ventana de <span class="adopt-days-label">30</span> días, más curva diaria de actividad.</p>
+          </div>
+        </div>
+        <div class="charts-grid-2 adoption-q1-grid">
+          <div class="table-scroll">
+            <table class="gcp-table">
+              <thead>
+                <tr>
+                  <th>Usuario / Principal</th>
+                  <th>Estado Hoy</th>
+                  <th>Consultas Hoy</th>
+                  <th>Sesiones (<span class="adopt-days-label">30</span>d)</th>
+                  <th>Turnos (<span class="adopt-days-label">30</span>d)</th>
+                  <th>Tokens Est.</th>
+                  <th>Apps Utilizados</th>
+                  <th>Última Actividad</th>
+                </tr>
+              </thead>
+              <tbody id="adoptQ1UsersTableBody"></tbody>
+            </table>
+          </div>
+          <div class="adoption-chart-box">
+            <div class="sub-card-title">Curva de Actividad Diaria (Sesiones y Consultas)</div>
+            <div class="chart-container chart-md">
+              <canvas id="adoptDailyActivityChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PREGUNTAS 2 Y 3: Aplicaciones más utilizadas y Agentes más utilizados -->
+      <section class="charts-grid-2">
+        <!-- PREGUNTA 2 -->
+        <div class="card adoption-question-card" id="adoption-q2">
+          <div class="card-header">
+            <div>
+              <div class="question-badge-row">
+                <span class="question-number-pill">Pregunta 2</span>
+                <span class="table-badge">Motores Discovery Engine</span>
+              </div>
+              <h2>¿Cuáles son las aplicaciones más utilizadas? ¿Por cuáles usuarios?</h2>
+              <p class="card-sub">Ranking de aplicaciones (Engines) por volumen de consultas/turnos, sesiones activas, agentes vinculados y usuarios que las operan.</p>
+            </div>
+          </div>
+          <div class="chart-container chart-sm">
+            <canvas id="adoptTopAppsChart"></canvas>
+          </div>
+          <div class="table-scroll" style="margin-top: 12px;">
+            <table class="gcp-table">
+              <thead>
+                <tr>
+                  <th>Aplicación (Engine)</th>
+                  <th>Sesiones (<span class="adopt-days-label">30</span>d)</th>
+                  <th>Turnos (<span class="adopt-days-label">30</span>d)</th>
+                  <th>Agentes</th>
+                  <th>Usuarios Activos</th>
+                </tr>
+              </thead>
+              <tbody id="adoptQ2AppsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PREGUNTA 3 -->
+        <div class="card adoption-question-card" id="adoption-q3">
+          <div class="card-header">
+            <div>
+              <div class="question-badge-row">
+                <span class="question-number-pill">Pregunta 3</span>
+                <span class="table-badge">Assistants, ADK &amp; A2A Agents</span>
+              </div>
+              <h2>¿Cuáles son los agentes más utilizados? ¿Por cuáles usuarios?</h2>
+              <p class="card-sub">Ranking de agentes registrados y asistentes por invocaciones/turnos, tokens consumidos, aplicación contenedora y usuarios asignados.</p>
+            </div>
+          </div>
+          <div class="chart-container chart-sm">
+            <canvas id="adoptTopAgentsChart"></canvas>
+          </div>
+          <div class="table-scroll" style="margin-top: 12px;">
+            <table class="gcp-table">
+              <thead>
+                <tr>
+                  <th>Agente</th>
+                  <th>Tipo / Origen</th>
+                  <th>Aplicación</th>
+                  <th>Turnos</th>
+                  <th>Tokens</th>
+                  <th>Usuarios</th>
+                </tr>
+              </thead>
+              <tbody id="adoptQ3AgentsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PREGUNTAS 4 Y 5: Usuarios sin uso (Dormant) y Otras Capacidades de la Licencia -->
+      <section class="charts-grid-2">
+        <!-- PREGUNTA 4 -->
+        <div class="card adoption-question-card" id="adoption-q4">
+          <div class="card-header">
+            <div>
+              <div class="question-badge-row">
+                <span class="question-number-pill">Pregunta 4</span>
+                <span class="table-badge">Optimización de Licencias</span>
+              </div>
+              <h2>¿Quiénes no han estado utilizando Gemini Enterprise?</h2>
+              <p class="card-sub">Auditoría de asientos asignados sin actividad reciente o nunca utilizados, e impacto mensual de optimización/reasignación.</p>
+            </div>
+            <span id="adoptDormantSavingsBadge" class="status-pill status-warn">$0/mes recuperables</span>
+          </div>
+          <div id="adoptQ4SummaryCallout" class="adoption-callout-box"></div>
+          <div class="table-scroll">
+            <table class="gcp-table">
+              <thead>
+                <tr>
+                  <th>Usuario / Principal</th>
+                  <th>Estado de Licencia</th>
+                  <th>Días Inactivo</th>
+                  <th>Motivo / Diagnóstico</th>
+                  <th>Ahorro Est. / Mes</th>
+                  <th>Acción Recomendada</th>
+                </tr>
+              </thead>
+              <tbody id="adoptQ4NonUsersTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PREGUNTA 5 -->
+        <div class="card adoption-question-card" id="adoption-q5">
+          <div class="card-header">
+            <div>
+              <div class="question-badge-row">
+                <span class="question-number-pill">Pregunta 5</span>
+                <span class="table-badge">Ecosistema Google Cloud AI</span>
+              </div>
+              <h2>¿Qué otras capacidades de la licencia están utilizando los usuarios?</h2>
+              <p class="card-sub">Telemetría en vivo de capacidades complementarias en el proyecto: Gemini Code Assist, Google Antigravity / ADK Agent Runtime, Síntesis de Voz y Búsqueda Conectada.</p>
+            </div>
+          </div>
+          <div id="adoptQ5CapabilitiesGrid" class="capabilities-cards-grid"></div>
+        </div>
+      </section>
+
+      <!-- PREGUNTA 6: ¿Qué tipo de prompts están realizando los usuarios? ¿Fines de trabajo u otros fines? -->
+      <section class="card adoption-question-card" id="adoption-q6">
+        <div class="card-header">
+          <div>
+            <div class="question-badge-row">
+              <span class="question-number-pill">Pregunta 6</span>
+              <span class="table-badge">Clasificación Semántica &amp; DLP Guard</span>
+            </div>
+            <h2>¿Qué tipo de prompts están realizando los usuarios? ¿Están usando la aplicación para fines de trabajo u otros fines?</h2>
+            <p class="card-sub">Análisis en tiempo real de las consultas/prompts ejecutados en sesiones de Gemini Enterprise, clasificando intención laboral vs. no laboral y categoría funcional (con protección PII automática).</p>
+          </div>
+          <span id="adoptQ6TotalBadge" class="table-badge">0 Prompts Analizados</span>
+        </div>
+
+        <div class="charts-grid-2" style="margin-bottom: 16px;">
+          <div class="adoption-chart-box">
+            <div class="sub-card-title">Distribución: Fines de Trabajo vs. Otros Fines</div>
+            <div class="chart-container chart-sm">
+              <canvas id="adoptWorkIntentChart"></canvas>
+            </div>
+          </div>
+          <div class="adoption-chart-box">
+            <div class="sub-card-title">Taxonomía de Prompts por Categoría de Negocio</div>
+            <div class="chart-container chart-sm">
+              <canvas id="adoptPromptCategoryChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-card-title" style="margin-bottom: 8px;">Muestra de Prompts Reales Registrados en Sesiones (<span class="adopt-days-label">30</span>d)</div>
+        <div class="table-scroll">
+          <table class="gcp-table">
+            <thead>
+              <tr>
+                <th>Fecha / Hora</th>
+                <th>Usuario</th>
+                <th>Aplicación</th>
+                <th>Prompt / Consulta del Usuario</th>
+                <th>Clasificación</th>
+                <th>Categoría</th>
+                <th>Respuesta del Agente</th>
+              </tr>
+            </thead>
+            <tbody id="adoptQ6PromptsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div><!-- /#mainTabAdoption -->
+
+    <!-- =================================================================== -->
+    <!-- TAB 3: SOLUTION ARCHITECTURE (DIAGRAMA CONCEPTUAL DE LA SOLUCIÓN)   -->
+    <!-- =================================================================== -->
+    <div id="mainTabArchitecture" class="main-tab-panel hidden">
+      <section id="section-architecture" class="card arch-hero-card">
+        <div class="card-header">
+          <div>
+            <div class="narrative-eyebrow">
+              <span class="ai-sparkle-badge">CONCEPTUAL ARCHITECTURE</span>
+              <span class="model-pill">Serverless &amp; Zero-Hardcoding</span>
+              <span class="tts-voice-pill">Google Cloud Native</span>
+            </div>
+            <h2>Arquitectura Conceptual de la Solución — Gemini Enterprise Smart Reports</h2>
+            <p class="card-sub">Vista conceptual de extremo a extremo de cómo la solución recolecta telemetría en vivo, correlaciona linaje y costos, aplica privacidad y genera reportes ejecutivos con voz natural.</p>
+          </div>
+        </div>
+
+        <!-- Conceptual 5-Layer Architecture Diagram -->
+        <div class="arch-diagram-wrapper">
+          <!-- Layer 1: Usuarios y Ecosistema -->
+          <div class="arch-stage">
+            <div class="arch-stage-badge">Capa 1 · Canales de Experiencia</div>
+            <div class="arch-stage-title">Usuarios &amp; Ecosistema Gemini</div>
+            <div class="arch-nodes-stack">
+              <div class="arch-node arch-node-blue">
+                <div class="arch-node-icon">💬</div>
+                <div>
+                  <div class="arch-node-name">Aplicaciones Conversacionales</div>
+                  <div class="arch-node-desc">Búsqueda empresarial y asistentes de negocio</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-blue">
+                <div class="arch-node-icon">🤖</div>
+                <div>
+                  <div class="arch-node-name">Agentes Especializados</div>
+                  <div class="arch-node-desc">Agentes autónomos, multi-agente y flujos de trabajo</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-blue">
+                <div class="arch-node-icon">💻</div>
+                <div>
+                  <div class="arch-node-name">Herramientas de Productividad</div>
+                  <div class="arch-node-desc">Asistencia de código en IDE y entornos de desarrollo</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector" aria-hidden="true">
+            <div class="arch-arrow-label">Eventos de Uso &amp; Consultas</div>
+            <div class="arch-arrow-line">&rarr;</div>
+          </div>
+
+          <!-- Layer 2: Fuentes de Telemetría en Vivo -->
+          <div class="arch-stage">
+            <div class="arch-stage-badge">Capa 2 · Fuentes de Señales</div>
+            <div class="arch-stage-title">APIs Nativas de Google Cloud</div>
+            <div class="arch-nodes-stack">
+              <div class="arch-node arch-node-cyan">
+                <div class="arch-node-icon">🧭</div>
+                <div>
+                  <div class="arch-node-name">Catálogo de Motores, Agentes y Sesiones</div>
+                  <div class="arch-node-desc">Inventario de aplicaciones, conversaciones, turnos y conectores</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-cyan">
+                <div class="arch-node-icon">🪪</div>
+                <div>
+                  <div class="arch-node-name">Gestión de Licencias e Identidades</div>
+                  <div class="arch-node-desc">Asignación de asientos, estado de activación y último acceso</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-cyan">
+                <div class="arch-node-icon">📈</div>
+                <div>
+                  <div class="arch-node-name">Observabilidad y Consumo de Modelos</div>
+                  <div class="arch-node-desc">Métricas de tokens de entrada/salida, latencia y trazas de auditoría</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector" aria-hidden="true">
+            <div class="arch-arrow-label">Descubrimiento en Tiempo Real</div>
+            <div class="arch-arrow-line">&rarr;</div>
+          </div>
+
+          <!-- Layer 3: Motor Inteligente de Correlación -->
+          <div class="arch-stage arch-stage-center">
+            <div class="arch-stage-badge">Capa 3 · Núcleo Analítico Serverless</div>
+            <div class="arch-stage-title">Motor de Correlación &amp; Gobernanza</div>
+            <div class="arch-nodes-stack">
+              <div class="arch-node arch-node-green">
+                <div class="arch-node-icon">🕸️</div>
+                <div>
+                  <div class="arch-node-name">Descubrimiento de Linaje Topológico</div>
+                  <div class="arch-node-desc">Mapeo automático entre orígenes de datos, almacenes, motores y agentes</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-green">
+                <div class="arch-node-icon">🛡️</div>
+                <div>
+                  <div class="arch-node-name">Clasificador de Intención &amp; Filtro de Privacidad</div>
+                  <div class="arch-node-desc">Enmascaramiento dinámico de identidades y clasificación laboral vs. general</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-green">
+                <div class="arch-node-icon">🧮</div>
+                <div>
+                  <div class="arch-node-name">Motor Transparente de Costos y ROI</div>
+                  <div class="arch-node-desc">Cálculo auditable de licencias, indexación e inferencia de modelos</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector" aria-hidden="true">
+            <div class="arch-arrow-label">Contexto Estructurado</div>
+            <div class="arch-arrow-line">&rarr;</div>
+          </div>
+
+          <!-- Layer 4: Inteligencia Generativa & Voz -->
+          <div class="arch-stage">
+            <div class="arch-stage-badge">Capa 4 · Síntesis con IA</div>
+            <div class="arch-stage-title">Modelos Gemini de Última Generación</div>
+            <div class="arch-nodes-stack">
+              <div class="arch-node arch-node-yellow">
+                <div class="arch-node-icon">✨</div>
+                <div>
+                  <div class="arch-node-name">Generación de Resumen Ejecutivo</div>
+                  <div class="arch-node-desc">Síntesis bajo demanda de hallazgos críticos y recomendaciones accionables</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-yellow">
+                <div class="arch-node-icon">🔊</div>
+                <div>
+                  <div class="arch-node-name">Narración de Voz Expresiva</div>
+                  <div class="arch-node-desc">Lectura hablada natural del reporte ejecutivo con voces expresivas</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector" aria-hidden="true">
+            <div class="arch-arrow-label">Visualización Interactiva</div>
+            <div class="arch-arrow-line">&rarr;</div>
+          </div>
+
+          <!-- Layer 5: Experiencia del Administrador -->
+          <div class="arch-stage">
+            <div class="arch-stage-badge">Capa 5 · Presentación</div>
+            <div class="arch-stage-title">Portal Ejecutivo Smart Reports</div>
+            <div class="arch-nodes-stack">
+              <div class="arch-node arch-node-purple">
+                <div class="arch-node-icon">📊</div>
+                <div>
+                  <div class="arch-node-name">Dashboard Ejecutivo &amp; Linaje</div>
+                  <div class="arch-node-desc">KPIs financieros, consumo por modelo y grafo interactivo de extremo a extremo</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-purple">
+                <div class="arch-node-icon">👥</div>
+                <div>
+                  <div class="arch-node-name">Centro de Telemetría y Adopción</div>
+                  <div class="arch-node-desc">Visibilidad de usuarios activos, asientos inactivos, apps, agentes y prompts</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Architectural Pillars Summary -->
+        <div class="arch-pillars-grid">
+          <div class="arch-pillar-card">
+            <div class="arch-pillar-title">1. Cero Datos Cableados (100% Live)</div>
+            <p>La aplicación no depende de bases de datos intermedias manuales ni datos estáticos: interroga directamente los servicios de control y observabilidad de la nube en tiempo real.</p>
+          </div>
+          <div class="arch-pillar-card">
+            <div class="arch-pillar-title">2. Privacidad y Gobernanza por Diseño</div>
+            <p>Las identidades de los usuarios y el contenido de las consultas se presentan protegidos por defecto, permitiendo al Administrador alternar la vista auditada según sus permisos.</p>
+          </div>
+          <div class="arch-pillar-card">
+            <div class="arch-pillar-title">3. Despliegue Ligero sin Servidores</div>
+            <p>Empaquetado como un contenedor ligero auto-contenido que escala automáticamente a cero y utiliza la identidad nativa del entorno sin almacenar llaves ni secretos.</p>
+          </div>
+          <div class="arch-pillar-card">
+            <div class="arch-pillar-title">4. Transparencia Financiera y Operativa</div>
+            <p>Cada dólar estimado y cada recomendación operativa se vinculan de forma transparente con el uso de licencias, el volumen de datos indexados y el consumo de tokens.</p>
+          </div>
+        </div>
+      </section>
+    </div><!-- /#mainTabArchitecture -->
   </main>
 
   <div id="toastBanner" class="toast hidden"></div>

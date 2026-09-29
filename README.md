@@ -27,6 +27,12 @@ A lightweight **Google Cloud Run** dashboard that provides live usage analytics,
 - **Configurable Expense & ROI Formula (`ƒx Understand Expense`)**  
   Built-in configuration drawer (`☰`) to customize token pricing, connector costs, seat rates, and productivity savings assumptions in real time.
 
+- **Admin Telemetry & Adoption Tab (`Telemetría y Adopción`)**  
+  Answers the 6 core Admin adoption questions across any custom $X$-day window (`1d` to `365d`) with a one-click privacy toggle (masked vs. full Admin view): active users today and in $X$ days, top applications, top agents, dormant/reclaimable licenses, ecosystem capability usage (Gemini Code Assist, Google Antigravity / ADK, multimodal tools), and work vs. non-work prompt classification.
+
+- **Conceptual Solution Architecture Tab**  
+  End-to-end 5-layer conceptual architecture diagram illustrating how live telemetry, correlation, privacy governance, and generative AI synthesis work together.
+
 ---
 
 ## Quick Start
