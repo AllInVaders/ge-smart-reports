@@ -11,6 +11,12 @@ if [[ -z "${PROJECT_ID}" ]]; then
   exit 1
 fi
 
+if ! gcloud auth print-access-token --quiet >/dev/null 2>&1; then
+  if [[ -f "${HOME}/.config/gcloud/application_default_credentials.json" ]]; then
+    export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE="${HOME}/.config/gcloud/application_default_credentials.json"
+  fi
+fi
+
 echo "Deploying ${SERVICE_NAME} to project=${PROJECT_ID} region=${REGION}..."
 gcloud run deploy "${SERVICE_NAME}" \
   --source . \
