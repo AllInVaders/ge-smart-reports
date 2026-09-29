@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.3.1" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -184,17 +184,17 @@
   <main class="container">
     <!-- Primary View Tab Navigation Bar -->
     <nav class="primary-view-tabs" id="primaryViewTabs" aria-label="Primary Dashboard Views">
-      <button class="primary-tab-btn active" data-main-tab="OVERVIEW" id="tabBtnOverview">
+      <button type="button" class="primary-tab-btn view-tab-btn active" data-main-tab="OVERVIEW" id="tabBtnOverview">
         <span class="tab-icon">📊</span>
         <span class="tab-title">Executive &amp; Operations Overview</span>
         <span class="tab-pill" id="tabBadgeOverview">Live Telemetry</span>
       </button>
-      <button class="primary-tab-btn" data-main-tab="ADOPTION" id="tabBtnAdoption">
+      <button type="button" class="primary-tab-btn view-tab-btn" data-main-tab="ADOPTION" id="tabBtnAdoption">
         <span class="tab-icon">👥</span>
         <span class="tab-title">Telemetría y Adopción (Admin)</span>
         <span class="tab-pill tab-pill-blue" id="tabBadgeAdoption">6 Admin Insights</span>
       </button>
-      <button class="primary-tab-btn" data-main-tab="ARCHITECTURE" id="tabBtnArchitecture">
+      <button type="button" class="primary-tab-btn view-tab-btn" data-main-tab="ARCHITECTURE" id="tabBtnArchitecture">
         <span class="tab-icon">🏗️</span>
         <span class="tab-title">Solution Architecture</span>
         <span class="tab-pill tab-pill-teal">Conceptual</span>
@@ -1165,6 +1165,6 @@
   </main>
 
   <div id="toastBanner" class="toast hidden"></div>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=3.3.1"></script>
 </body>
 </html>

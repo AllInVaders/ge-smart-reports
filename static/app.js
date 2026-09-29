@@ -1533,7 +1533,7 @@ function switchMainTab(tabName) {
       'OVERVIEW';
   state.activeMainTab = validTab;
 
-  document.querySelectorAll('#primaryViewTabs .view-tab-btn').forEach((btn) => {
+  document.querySelectorAll('#primaryViewTabs [data-main-tab]').forEach((btn) => {
     const t = btn.getAttribute('data-main-tab');
     const isActive = t === validTab;
     btn.classList.toggle('active', isActive);
@@ -1546,6 +1546,18 @@ function switchMainTab(tabName) {
       ?.classList.toggle('hidden', validTab !== 'ADOPTION');
   document.getElementById('mainTabArchitecture')
       ?.classList.toggle('hidden', validTab !== 'ARCHITECTURE');
+
+  try {
+    const url = new URL(window.location.href);
+    if (validTab === 'OVERVIEW') {
+      url.searchParams.delete('tab');
+    } else {
+      url.searchParams.set('tab', validTab);
+    }
+    window.history.replaceState({}, '', url.toString());
+  } catch (e) {
+    // Ignore history state errors
+  }
 
   if (validTab === 'ADOPTION') {
     renderAdoptionTelemetry();
@@ -2060,7 +2072,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Primary View Tabs switching
-  document.querySelectorAll('#primaryViewTabs .view-tab-btn').forEach((btn) => {
+  document.querySelectorAll('#primaryViewTabs [data-main-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const targetTab = btn.getAttribute('data-main-tab') || 'OVERVIEW';
       switchMainTab(targetTab);

@@ -30,7 +30,7 @@ if HAS_FASTAPI:
           "Open-source, 100% live Discovery Engine API, Cloud Monitoring Token Billing,"
           " Natural Language Executive Summary (gemini-3.8-flash), TTS (gemini-3.8-flash-tts) & Lineage Reporting Dashboard."
       ),
-      version="3.3.0",
+      version="3.3.1",
   )
   app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -43,7 +43,7 @@ if HAS_FASTAPI:
     return JSONResponse({
         "status": "ok",
         "project_id": engine.project_id,
-        "version": "3.3.0",
+        "version": "3.3.1",
     })
 
   @app.get("/api/report")
@@ -138,7 +138,7 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
 
     if path == "/api/health":
       self._send_json(
-          {"status": "ok", "project_id": engine.project_id, "version": "3.3.0"}
+          {"status": "ok", "project_id": engine.project_id, "version": "3.3.1"}
       )
       return
     if path == "/api/report":
