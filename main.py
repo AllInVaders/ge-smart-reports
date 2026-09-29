@@ -28,9 +28,9 @@ if HAS_FASTAPI:
       title="Gemini Enterprise Smart Reports",
       description=(
           "Open-source, 100% live Discovery Engine API, Cloud Monitoring Token Billing,"
-          " Natural Language Executive Summary, TTS & Lineage Reporting Dashboard."
+          " Natural Language Executive Summary (gemini-3.8-flash), TTS (gemini-3.8-flash-tts) & Lineage Reporting Dashboard."
       ),
-      version="3.1.0",
+      version="3.2.0",
   )
   app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -43,7 +43,7 @@ if HAS_FASTAPI:
     return JSONResponse({
         "status": "ok",
         "project_id": engine.project_id,
-        "version": "3.1.0",
+        "version": "3.2.0",
     })
 
   @app.get("/api/report")
@@ -87,8 +87,8 @@ if HAS_FASTAPI:
   async def api_tts(req: Request) -> JSONResponse:
     payload: dict[str, Any] = await req.json()
     text = str(payload.get("text") or "")
-    voice = str(payload.get("voice_name") or "en-US-Neural2-F")
-    rate = float(payload.get("speaking_rate") or 1.05)
+    voice = str(payload.get("voice_name") or "Kore")
+    rate = float(payload.get("speaking_rate") or 1.0)
     data = engine.synthesize_report_speech(
         text=text, voice_name=voice, speaking_rate=rate
     )
@@ -123,7 +123,7 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
 
     if path == "/api/health":
       self._send_json(
-          {"status": "ok", "project_id": engine.project_id, "version": "3.1.0"}
+          {"status": "ok", "project_id": engine.project_id, "version": "3.2.0"}
       )
       return
     if path == "/api/report":
@@ -194,8 +194,8 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
       return
     if parsed.path == "/api/tts":
       text = str(payload.get("text") or "")
-      voice = str(payload.get("voice_name") or "en-US-Neural2-F")
-      rate = float(payload.get("speaking_rate") or 1.05)
+      voice = str(payload.get("voice_name") or "Kore")
+      rate = float(payload.get("speaking_rate") or 1.0)
       self._send_json(
           engine.synthesize_report_speech(
               text=text, voice_name=voice, speaking_rate=rate

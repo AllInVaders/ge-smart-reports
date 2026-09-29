@@ -166,7 +166,8 @@ function renderKpisAndFormulaBanner(data) {
           fmtNum(k.value_saved_usd)} Value (${k.roi_multiple}x ROI)`;
 
   const eqText = fb.equation_text || '';
-  document.getElementById('liveEquationBannerText').textContent = eqText;
+  const bannerEl = document.getElementById('liveEquationBannerText');
+  if (bannerEl) bannerEl.textContent = eqText;
   const drawerEq = document.getElementById('drawerLiveEquation');
   if (drawerEq) drawerEq.textContent = eqText;
 }
@@ -181,7 +182,7 @@ function renderNarrativeSection() {
 
   const badge = document.getElementById('narrativeSourceBadge');
   if (badge) {
-    badge.textContent = nav.generated_by || 'Live Telemetry Grounded';
+    badge.textContent = nav.generated_by || 'Vertex AI gemini-3.8-flash';
   }
   const recProj = document.getElementById('recProjectCode');
   if (recProj && state.reportData) {
@@ -242,7 +243,7 @@ async function generateOnDemandNarrative() {
   if (!btn) return;
   const origText = btn.textContent;
   btn.disabled = true;
-  btn.textContent = '✨ Synthesizing with Gemini 2.5 Flash...';
+  btn.textContent = '✨ Synthesizing with gemini-3.8-flash...';
 
   try {
     const res = await fetch('/api/narrative', {
@@ -257,7 +258,7 @@ async function generateOnDemandNarrative() {
     state.narrativeData = data;
     renderNarrativeSection();
     showToast(
-        'Generated fresh on-demand Executive Summary & Recommendations via Vertex AI Gemini 2.5 Flash');
+        'Generated fresh on-demand Executive Summary & Recommendations via Vertex AI gemini-3.8-flash');
   } catch (e) {
     showToast('Error generating on-demand narrative; showing live baseline.');
   } finally {
@@ -267,7 +268,7 @@ async function generateOnDemandNarrative() {
 }
 
 /* ==========================================================================
-   3. TEXT-TO-SPEECH ("READ ME THE REPORT") AUDIO PLAYER
+   3. TEXT-TO-SPEECH ("READ ME THE REPORT" — gemini-3.8-flash-tts) AUDIO PLAYER
    ========================================================================== */
 function getActiveTtsScript() {
   const nav = state.narrativeData ||
@@ -340,7 +341,7 @@ function stopTtsPlayback() {
   clearInterval(state._webSpeechTimer);
   state.ttsMode = null;
   updateTtsUiState(
-      'Audio Briefing Ready (Executive Summary + Environment Recommendations)',
+      'Audio Briefing Ready — gemini-3.8-flash-tts (Executive Summary + Recommendations)',
       0,
       false,
       false);
@@ -348,8 +349,8 @@ function stopTtsPlayback() {
 
 async function toggleTtsPlayback() {
   const audioEl = document.getElementById('ttsAudioElement');
-  const voice = document.getElementById('ttsVoiceSelect')?.value || 'en-US-Neural2-F';
-  const rate = Number(document.getElementById('ttsRateSelect')?.value || 1.08);
+  const voice = document.getElementById('ttsVoiceSelect')?.value || 'Kore';
+  const rate = Number(document.getElementById('ttsRateSelect')?.value || 1.0);
 
   // If currently playing or paused, toggle pause/resume
   if (state.ttsPlaying && !state.ttsPaused) {
@@ -368,7 +369,7 @@ async function toggleTtsPlayback() {
     } else if (state.ttsMode === 'WEB_SPEECH' && 'speechSynthesis' in window) {
       window.speechSynthesis.resume();
     }
-    updateTtsUiState('Reading Executive Summary & Environment Recommendations...', null, true, false);
+    updateTtsUiState('Reading Executive Summary & Environment Recommendations (gemini-3.8-flash-tts)...', null, true, false);
     return;
   }
 
@@ -384,7 +385,7 @@ async function toggleTtsPlayback() {
     return;
   }
 
-  updateTtsUiState('Synthesizing neural audio via Google Cloud Text-to-Speech API...', 10, true, false);
+  updateTtsUiState(`Synthesizing expressive voice audio via gemini-3.8-flash-tts (${voice})...`, 12, true, false);
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
@@ -403,17 +404,17 @@ async function toggleTtsPlayback() {
         if (audioEl.duration > 0) {
           const pct = (audioEl.currentTime / audioEl.duration) * 100;
           const phase = pct < 52 ?
-              'Reading Part 1: Top 5 Executive Summary Insights...' :
-              'Reading Part 2: Environment Recommendations...';
+              `gemini-3.8-flash-tts (${voice}) • Reading Part 1: Top 5 Executive Insights...` :
+              `gemini-3.8-flash-tts (${voice}) • Reading Part 2: Environment Recommendations...`;
           updateTtsUiState(`${phase} (${Math.round(pct)}%)`, pct, true, false);
         }
       };
       audioEl.onended = () => {
         updateTtsUiState(
-            'Finished reading Executive Summary & Recommendations', 100, false, false);
+            `Finished reading Executive Summary & Recommendations (gemini-3.8-flash-tts • ${voice})`, 100, false, false);
       };
       await audioEl.play();
-      showToast(`Playing report audio (${voice})`);
+      showToast(`Playing report audio via gemini-3.8-flash-tts (${voice})`);
       return;
     }
   } catch (e) {
@@ -871,7 +872,7 @@ function renderAgentsTable() {
         </td>
         <td><code>${a.agent_id}</code></td>
         <td>${a.agent_type}</td>
-        <td><code>${a.model_id || 'gemini-3.5-flash'}</code></td>
+        <td><code>${a.model_id || 'gemini-3.8-flash'}</code></td>
         <td>${statePill}</td>
         <td>${a.engine_name}</td>
         <td>${fmtNum(a.total_tokens_30d)}</td>
@@ -887,7 +888,7 @@ function renderAgentsTable() {
    8. INTERACTIVE REACTFLOW DATA & AGENT LINEAGE GRAPH — ALL 122 AGENTS
    ========================================================================== */
 function getVisibleLineageNodesAndEdges() {
-  if (!state.lineageData) return {nodes: [], edges: [], maxX: 1500, maxY: 700};
+  if (!state.lineageData) return {nodes: [], edges: [], maxX: 1650, maxY: 700};
 
   const allNodes = state.lineageData.nodes || [];
   const allEdges = state.lineageData.edges || [];
@@ -950,49 +951,49 @@ function getVisibleLineageNodesAndEdges() {
     agNodes = agNodes.slice(startIdx, startIdx + state.lineagePageSize);
   }
 
-  // Compute dynamic layout coordinates based on active view mode
+  // Compute dynamic layout coordinates with generous gaps so cards & handles never crowd
   const positionedNodes = [];
 
   if (mode === 'MATRIX') {
-    // Tier 1: Data Stores (2 sub-columns: x=20, x=275)
+    // Tier 1: Data Stores (2 sub-columns: x=24, x=304)
     const dsCols = dsNodes.length > 10 ? 2 : 1;
     dsNodes.forEach((n, idx) => {
       const col = idx % dsCols;
       const row = Math.floor(idx / dsCols);
       positionedNodes.push({
         ...n,
-        position: {x: 20 + col * 255, y: 24 + row * 94},
+        position: {x: 24 + col * 280, y: 28 + row * 106},
       });
     });
 
-    // Tier 2: GE Apps (1 column: x=560)
+    // Tier 2: GE Apps (1 column: x=640 — 94px corridor from Tier 1 and 118px corridor to Tier 3)
     engNodes.forEach((n, idx) => {
       positionedNodes.push({
         ...n,
-        position: {x: 560, y: 24 + idx * 94},
+        position: {x: 640, y: 28 + idx * 106},
       });
     });
 
-    // Tier 3: All 122 Registered Agents (4 sub-columns: x=850, 1105, 1360, 1615)
+    // Tier 3: All 122 Registered Agents (4 sub-columns: x=1000, 1280, 1560, 1840)
     const agCols = agNodes.length > 24 ? 4 : (agNodes.length > 8 ? 2 : 1);
     agNodes.forEach((n, idx) => {
       const col = idx % agCols;
       const row = Math.floor(idx / agCols);
       positionedNodes.push({
         ...n,
-        position: {x: 850 + col * 255, y: 24 + row * 92},
+        position: {x: 1000 + col * 280, y: 28 + row * 104},
       });
     });
 
     // Tier 4: All 43 Vertex AI Reasoning Engines (2 sub-columns after Agents)
-    const reBaseX = 850 + agCols * 255 + 35;
+    const reBaseX = 1000 + agCols * 280 + 65;
     const reCols = reNodes.length > 12 ? 2 : 1;
     reNodes.forEach((n, idx) => {
       const col = idx % reCols;
       const row = Math.floor(idx / reCols);
       positionedNodes.push({
         ...n,
-        position: {x: reBaseX + col * 255, y: 24 + row * 94},
+        position: {x: reBaseX + col * 280, y: 28 + row * 106},
       });
     });
   } else {
@@ -1000,25 +1001,25 @@ function getVisibleLineageNodesAndEdges() {
     dsNodes.forEach((n, idx) => {
       positionedNodes.push({
         ...n,
-        position: {x: 20, y: 24 + idx * 94},
+        position: {x: 24, y: 28 + idx * 106},
       });
     });
     engNodes.forEach((n, idx) => {
       positionedNodes.push({
         ...n,
-        position: {x: 390, y: 24 + idx * 94},
+        position: {x: 420, y: 28 + idx * 106},
       });
     });
     agNodes.forEach((n, idx) => {
       positionedNodes.push({
         ...n,
-        position: {x: 760, y: 24 + idx * 94},
+        position: {x: 820, y: 28 + idx * 106},
       });
     });
     reNodes.forEach((n, idx) => {
       positionedNodes.push({
         ...n,
-        position: {x: 1130, y: 24 + idx * 94},
+        position: {x: 1220, y: 28 + idx * 106},
       });
     });
   }
@@ -1027,7 +1028,13 @@ function getVisibleLineageNodesAndEdges() {
   const visibleEdges = allEdges.filter(
       (e) => visibleIds.has(e.source) && visibleIds.has(e.target));
 
-  // Update tier count badges
+  // Update tier count badges & dynamic dropdown labels
+  const totalAgCount = allNodes.filter((n) => n.layer === 'GE_AGENT').length;
+  const matOpt = document.querySelector('#lineageLayoutSelect option[value="MATRIX"]');
+  if (matOpt) matOpt.textContent = `View: All ${totalAgCount} Agents (Multi-Column Matrix)`;
+  const allSubOpt = document.querySelector('#lineageSubtypeSelect option[value="ALL"]');
+  if (allSubOpt) allSubOpt.textContent = `All Agent Types (${totalAgCount})`;
+
   document.getElementById('tierCountDs').textContent = dsNodes.length;
   document.getElementById('tierCountEng').textContent = engNodes.length;
   document.getElementById('tierCountAg').textContent = agNodes.length;
@@ -1039,8 +1046,8 @@ function getVisibleLineageNodesAndEdges() {
         `Showing ${agNodes.length} Agents • ${positionedNodes.length} Total Nodes • ${visibleEdges.length} Edges`;
   }
 
-  const maxX = Math.max(...positionedNodes.map((n) => n.position.x + 265), 1450);
-  const maxY = Math.max(...positionedNodes.map((n) => n.position.y + 115), 680);
+  const maxX = Math.max(...positionedNodes.map((n) => n.position.x + 275), 1550);
+  const maxY = Math.max(...positionedNodes.map((n) => n.position.y + 120), 680);
 
   return {nodes: positionedNodes, edges: visibleEdges, maxX, maxY};
 }
@@ -1091,52 +1098,68 @@ function renderLineageCanvas() {
   const NODE_W = 242;
   const NODE_H = 84;
   const q = state.lineageSearch.trim().toLowerCase();
+  const isDenseMatrix = edges.length > 40;
+  const selectedEdgesCount = edges.filter(
+      (e) => e.source === state.lineageSelectedNodeId ||
+          e.target === state.lineageSelectedNodeId).length;
 
-  const edgesSvgHtml = edges
-      .map((e) => {
-        const src = nodeMap[e.source];
-        const tgt = nodeMap[e.target];
-        if (!src || !tgt) return '';
-        const x1 = src.position.x + NODE_W;
-        const y1 = src.position.y + NODE_H / 2;
-        const x2 = tgt.position.x;
-        const y2 = tgt.position.y + NODE_H / 2;
-        const dx = Math.max(Math.abs(x2 - x1) * 0.42, 36);
-        const pathD =
-            `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+  const bgEdgesSvg = [];
+  const fgEdgesSvg = [];
 
-        const isSelected = state.lineageSelectedNodeId === e.source ||
-            state.lineageSelectedNodeId === e.target;
-        const strokeColor = e.status === 'WARNING' ?
-            '#d93025' :
-            (isSelected ? '#1e8e3e' : '#1a73e8');
-        const animClass = (state.lineageAnimated && e.animated) ?
-            'rf-edge-animated' :
-            '';
-        const hiClass = isSelected ? 'edge-highlighted' : '';
-        const midX = (x1 + x2) / 2;
-        const midY = (y1 + y2) / 2;
-        const showLabel = isSelected || edges.length <= 45;
-        const labelW = Math.max((e.label || '').length * 5.8 + 10, 48);
+  edges.forEach((e) => {
+    const src = nodeMap[e.source];
+    const tgt = nodeMap[e.target];
+    if (!src || !tgt) return;
+    const x1 = src.position.x + NODE_W;
+    const y1 = src.position.y + NODE_H / 2;
+    const x2 = tgt.position.x;
+    const y2 = tgt.position.y + NODE_H / 2;
+    const dx = Math.max(Math.abs(x2 - x1) * 0.42, 38);
+    const pathD =
+        `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 
-        return `
+    const isSelected = state.lineageSelectedNodeId === e.source ||
+        state.lineageSelectedNodeId === e.target;
+    const strokeColor = e.status === 'WARNING' ?
+        '#d93025' :
+        (isSelected ? '#1e8e3e' : '#1a73e8');
+    // In dense 213-node view, only animate highlighted edges or warning edges so the background stays clean
+    const shouldAnimate = state.lineageAnimated && e.animated &&
+        (isSelected || !isDenseMatrix || e.status === 'WARNING');
+    const animClass = shouldAnimate ? 'rf-edge-animated' : '';
+    const hiClass = isSelected ?
+        'edge-highlighted' :
+        (isDenseMatrix ? 'edge-dimmed' : '');
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+    // Only render inline SVG pill labels when there are <= 16 selected edges so labels never stack on top of each other
+    const showLabel = (isSelected && selectedEdgesCount <= 16) || edges.length <= 28;
+    const labelW = Math.max((e.label || '').length * 5.8 + 10, 48);
+
+    const svgGroup = `
       <g>
         <path d="${pathD}" class="rf-edge-path ${animClass} ${hiClass}" stroke="${
-            strokeColor}" marker-end="url(#rfArrow)" />
+        strokeColor}" marker-end="url(#rfArrow)" />
         ${
-            (showLabel && e.label) ?
-                `
+        (showLabel && e.label) ?
+            `
           <rect x="${midX - labelW / 2}" y="${midY - 8}" width="${
-                    labelW}" height="16" class="rf-edge-label-bg" />
+                labelW}" height="16" class="rf-edge-label-bg" />
           <text x="${midX}" y="${
-                    midY + 3}" text-anchor="middle" class="rf-edge-label-text">${
-                    e.label}</text>
+                midY + 3}" text-anchor="middle" class="rf-edge-label-text">${
+                e.label}</text>
         ` :
-                ''}
+            ''}
       </g>
     `;
-      })
-      .join('');
+    if (isSelected) {
+      fgEdgesSvg.push(svgGroup);
+    } else {
+      bgEdgesSvg.push(svgGroup);
+    }
+  });
+
+  const edgesSvgHtml = bgEdgesSvg.join('') + fgEdgesSvg.join('');
 
   const nodesHtml = nodes
       .map((n) => {

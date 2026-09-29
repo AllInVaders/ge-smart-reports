@@ -30,9 +30,9 @@
           <div class="drawer-section-title">Quick Navigation</div>
           <nav class="drawer-nav">
             <a href="#section-kpis" class="drawer-nav-link">📊 Overview &amp; KPIs</a>
-            <a href="#section-narrative" class="drawer-nav-link">✨ AI Summary &amp; TTS</a>
-            <a href="#section-model-billing" class="drawer-nav-link">🪙 Token Billing (Model/Agent)</a>
+            <a href="#section-narrative" class="drawer-nav-link">✨ Executive Summary &amp; TTS</a>
             <a href="#section-charts" class="drawer-nav-link">📈 Workstreams &amp; Deliverables</a>
+            <a href="#section-model-billing" class="drawer-nav-link">🪙 Token Billing (Model/Agent)</a>
             <a href="#section-lineage-graph" class="drawer-nav-link">🕸️ 122-Agent Lineage Graph</a>
             <a href="#section-datastores" class="drawer-nav-link">🗄️ Connected Data Stores</a>
             <a href="#section-agents" class="drawer-nav-link">🤖 Registered Agents (122)</a>
@@ -40,9 +40,15 @@
           </nav>
         </div>
 
-        <!-- Understand Expense & Formula Section -->
+        <!-- Understand Expense & Formula Section (Moved from main dashboard into Burger Menu Config) -->
         <div class="drawer-section expense-formula-section">
-          <div class="drawer-section-title">ƒx Understand Expense (Formula Engine)</div>
+          <div class="drawer-section-title">ƒx Live Expense Formula (Understand Expense)</div>
+          <div class="formula-strip drawer-formula-banner">
+            <div class="formula-strip-left">
+              <span class="formula-badge">ƒx LIVE EXPENSE FORMULA</span>
+              <span id="liveEquationBannerText" class="formula-strip-text">Calculating from live Discovery Engine &amp; Cloud Monitoring API counts...</span>
+            </div>
+          </div>
           <p class="formula-explainer">
             Combines <strong>100% live Cloud Monitoring token telemetry</strong> (<code>aiplatform.googleapis.com/publisher/online_serving/token_count</code>) and <strong>live Discovery Engine resource inventories</strong> (agents, data stores, connectors, licenses) with transparent, customizable pricing coefficients:
           </p>
@@ -202,35 +208,25 @@
       </div>
     </section>
 
-    <!-- Transparent Live Expense Equation Strip -->
-    <section class="formula-strip">
-      <div class="formula-strip-left">
-        <span class="formula-badge">ƒx LIVE EXPENSE FORMULA</span>
-        <span id="liveEquationBannerText" class="formula-strip-text">Calculating from live Discovery Engine &amp; Cloud Monitoring API counts...</span>
-      </div>
-      <button id="customizeFormulaStripBtn" class="link-btn">Customize Formula &rarr;</button>
-    </section>
-
-    <!-- 2. Natural Language Executive Summary (5 Bullets On-Demand) + Environment Recommendations + TTS "Read Me the Report" -->
+    <!-- 2. Executive Summary (5 Bullets On-Demand) + Environment Recommendations + TTS "Read Me the Report" -->
     <section id="section-narrative" class="card narrative-card">
       <div class="card-header narrative-header">
         <div>
           <div class="narrative-title-row">
-            <h2>Executive Summary &amp; Environment Recommendations (Natural Language)</h2>
-            <span id="narrativeSourceBadge" class="status-pill status-active">Live Telemetry Grounded</span>
+            <h2>Executive Summary &amp; Environment Recommendations</h2>
           </div>
           <p class="card-sub">
-            On-demand natural language synthesis of your top 5 executive insights and actionable architecture, connector &amp; token optimization recommendations
+            On-demand synthesis of your top 5 executive insights and actionable architecture, connector &amp; token optimization recommendations
           </p>
         </div>
         <div class="narrative-actions">
           <button id="generateNarrativeBtn" class="btn btn-primary">
-            ✨ Generate On-Demand Report (Gemini 2.5 Flash)
+            ✨ Generate On-Demand Report (gemini-3.8-flash)
           </button>
         </div>
       </div>
 
-      <!-- Interactive TTS Audio Bar ("Read Me the Report") -->
+      <!-- Interactive TTS Audio Bar ("Read Me the Report" — gemini-3.8-flash-tts) -->
       <div class="tts-player-bar" id="ttsPlayerBar">
         <div class="tts-left">
           <button id="ttsPlayToggleBtn" class="btn btn-tts-play">
@@ -239,7 +235,7 @@
           </button>
           <button id="ttsStopBtn" class="btn btn-secondary btn-sm" disabled>⏹ Stop</button>
           <div class="tts-status-box">
-            <div class="tts-status-title" id="ttsStatusTitle">Audio Briefing Ready (Executive Summary + Environment Recommendations)</div>
+            <div class="tts-status-title" id="ttsStatusTitle">Audio Briefing Ready — gemini-3.8-flash-tts (Executive Summary + Recommendations)</div>
             <div class="tts-progress-track">
               <div class="tts-progress-fill" id="ttsProgressFill" style="width: 0%;"></div>
             </div>
@@ -247,19 +243,20 @@
         </div>
         <div class="tts-right">
           <label class="tts-ctrl-label">
-            Voice
+            Voice Model
             <select id="ttsVoiceSelect" class="compact-select">
-              <option value="en-US-Neural2-F">Cloud TTS • Neural2 Female (EN)</option>
-              <option value="en-US-Neural2-D">Cloud TTS • Neural2 Male (EN)</option>
-              <option value="en-US-Journey-D">Cloud TTS • Journey Executive (EN)</option>
-              <option value="BROWSER_SPEECH">Browser Web Speech API</option>
+              <option value="Kore" selected>gemini-3.8-flash-tts • Kore (Executive Female)</option>
+              <option value="Charon">gemini-3.8-flash-tts • Charon (Executive Male)</option>
+              <option value="Aoede">gemini-3.8-flash-tts • Aoede (Warm Narrator)</option>
+              <option value="Puck">gemini-3.8-flash-tts • Puck (Dynamic Presenter)</option>
+              <option value="Fenrir">gemini-3.8-flash-tts • Fenrir (Deep Analyst)</option>
             </select>
           </label>
           <label class="tts-ctrl-label">
             Speed
             <select id="ttsRateSelect" class="compact-select">
-              <option value="1.0">1.0x</option>
-              <option value="1.08" selected>1.1x</option>
+              <option value="1.0" selected>1.0x</option>
+              <option value="1.08">1.1x</option>
               <option value="1.2">1.2x</option>
             </select>
           </label>
@@ -295,7 +292,52 @@
       </div>
     </section>
 
-    <!-- 3. Agent Platform Model Billing & Token Consumption (Per Model, Per Agent, Per Project/Engine) -->
+    <!-- 3. Google-Palette Workstreams & Deliverables Paired Bar Charts (Placed Immediately After Executive Summary) -->
+    <section id="section-charts" class="charts-grid-2">
+      <!-- Workstreams Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>What Gemini Enterprise Is Used For (Workstreams)</h2>
+            <p class="card-sub">Inferred dynamically from registered agent descriptions, types &amp; activity</p>
+          </div>
+          <div class="chart-controls">
+            <div class="legend-inline">
+              <span class="legend-item"><i class="swatch swatch-blue"></i>% of sessions</span>
+              <span class="legend-item"><i class="swatch swatch-teal"></i>% of variable spend</span>
+            </div>
+            <select id="workstreamsSortSelect" class="compact-select" aria-label="Sort workstreams">
+              <option value="spend">Sort: % of spend</option>
+              <option value="sessions">Sort: % of sessions</option>
+            </select>
+          </div>
+        </div>
+        <div id="workstreamsChartBox" class="paired-bars-list"></div>
+      </div>
+
+      <!-- Deliverables Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>Deliverables Produced by Agent Portfolio</h2>
+            <p class="card-sub">Grouped by output modality across Low-Code, ADK, Skill, Workflow &amp; A2A agents</p>
+          </div>
+          <div class="chart-controls">
+            <div class="legend-inline">
+              <span class="legend-item"><i class="swatch swatch-blue"></i>% of sessions</span>
+              <span class="legend-item"><i class="swatch swatch-teal"></i>% of variable spend</span>
+            </div>
+            <select id="deliverablesSortSelect" class="compact-select" aria-label="Sort deliverables">
+              <option value="spend">Sort: % of spend</option>
+              <option value="sessions">Sort: % of sessions</option>
+            </select>
+          </div>
+        </div>
+        <div id="deliverablesChartBox" class="paired-bars-list"></div>
+      </div>
+    </section>
+
+    <!-- 4. Agent Platform Model Billing & Token Consumption (Per Model, Per Agent, Per Project/Engine) -->
     <section id="section-model-billing" class="card">
       <div class="card-header">
         <div>
@@ -421,7 +463,7 @@
       </div>
     </section>
 
-    <!-- 4. Interactive ReactFlow Data & Agent Lineage Graph — All 122 Agents -->
+    <!-- 5. Interactive ReactFlow Data & Agent Lineage Graph — All 122 Agents -->
     <section id="section-lineage-graph" class="card">
       <div class="card-header">
         <div>
@@ -487,51 +529,6 @@
           <div class="inspector-edges-title">Connected Lineage Edges (<span id="inspEdgeCount">0</span>)</div>
           <div id="inspEdgesList" class="inspector-edges-list"></div>
         </aside>
-      </div>
-    </section>
-
-    <!-- 5. Google-Palette Workstreams & Deliverables Paired Bar Charts -->
-    <section id="section-charts" class="charts-grid-2">
-      <!-- Workstreams Card -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h2>What Gemini Enterprise Is Used For (Workstreams)</h2>
-            <p class="card-sub">Inferred dynamically from registered agent descriptions, types &amp; activity</p>
-          </div>
-          <div class="chart-controls">
-            <div class="legend-inline">
-              <span class="legend-item"><i class="swatch swatch-blue"></i>% of sessions</span>
-              <span class="legend-item"><i class="swatch swatch-teal"></i>% of variable spend</span>
-            </div>
-            <select id="workstreamsSortSelect" class="compact-select" aria-label="Sort workstreams">
-              <option value="spend">Sort: % of spend</option>
-              <option value="sessions">Sort: % of sessions</option>
-            </select>
-          </div>
-        </div>
-        <div id="workstreamsChartBox" class="paired-bars-list"></div>
-      </div>
-
-      <!-- Deliverables Card -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h2>Deliverables Produced by Agent Portfolio</h2>
-            <p class="card-sub">Grouped by output modality across Low-Code, ADK, Skill, Workflow &amp; A2A agents</p>
-          </div>
-          <div class="chart-controls">
-            <div class="legend-inline">
-              <span class="legend-item"><i class="swatch swatch-blue"></i>% of sessions</span>
-              <span class="legend-item"><i class="swatch swatch-teal"></i>% of variable spend</span>
-            </div>
-            <select id="deliverablesSortSelect" class="compact-select" aria-label="Sort deliverables">
-              <option value="spend">Sort: % of spend</option>
-              <option value="sessions">Sort: % of sessions</option>
-            </select>
-          </div>
-        </div>
-        <div id="deliverablesChartBox" class="paired-bars-list"></div>
       </div>
     </section>
 

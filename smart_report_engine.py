@@ -3,11 +3,11 @@
 All data in this module is dynamically fetched at runtime from Google Cloud APIs:
 1. Discovery Engine v1alpha/v1 API (`engines`, `agents` with full pagination,
    `dataStores`, `collections`, `dataConnector`, `userLicenses`)
-2. Vertex AI / Agent Platform v1beta1 & v1 API (`reasoningEngines`, `gemini-2.5-flash:generateContent`)
+2. Vertex AI / Agent Platform v1beta1 & v1 API (`reasoningEngines`, `gemini-3.8-flash:generateContent`)
 3. Cloud Monitoring v3 API (`aiplatform.googleapis.com/publisher/online_serving/token_count`
    and `model_invocation_count` for real-time model token consumption)
 4. Cloud Billing v1 API (`projects/{project}/billingInfo`)
-5. Cloud Text-to-Speech v1 API (`text:synthesize` for "Read Me the Report" audio)
+5. Gemini Flash TTS (`gemini-3.8-flash-tts` / Cloud Text-to-Speech v1beta1 `text:synthesize` for "Read Me the Report" audio)
 6. Cloud Run Admin v2 API (`services`) & Cloud Logging v2 API (`entries:list`)
 
 All financial ($ spend) and productivity (hours/value saved) figures are computed
@@ -17,12 +17,14 @@ Zero hardcoded/wired customer data is used.
 
 from __future__ import annotations
 
+import base64
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import datetime
 import hashlib
 import json
 import os
+import struct
 import subprocess
 import time
 from typing import Any
@@ -34,11 +36,13 @@ import urllib.request
 # Used alongside user-configurable multipliers in "Understand Expense"
 MODEL_PRICING_PER_1M: dict[str, dict[str, Any]] = {
     "gemini-3.8-flash": {"in": 0.30, "out": 2.50, "tier": "Flash 3.8"},
+    "gemini-3.8-flash-tts": {"in": 0.30, "out": 2.50, "tier": "Flash 3.8 TTS"},
     "gemini-3.7-flash": {"in": 0.30, "out": 2.50, "tier": "Flash 3.7"},
     "gemini-3.6-flash": {"in": 0.30, "out": 2.50, "tier": "Flash 3.6"},
     "gemini-3.5-flash": {"in": 0.25, "out": 2.00, "tier": "Flash 3.5"},
     "gemini-3.5-flash-lite": {"in": 0.10, "out": 0.40, "tier": "Flash-Lite"},
     "gemini-3.1-pro-preview": {"in": 1.25, "out": 5.00, "tier": "Pro 3.1"},
+    "gemini-3.1-flash-tts-preview": {"in": 0.30, "out": 2.50, "tier": "Flash TTS"},
     "gemini-3.1-flash-image": {"in": 0.40, "out": 3.00, "tier": "Multimodal Image"},
     "gemini-3.1-flash-lite": {"in": 0.10, "out": 0.40, "tier": "Flash-Lite"},
     "gemini-3.1-flash-live-preview-04-2026": {
@@ -189,11 +193,11 @@ def _classify_agent(agent: dict[str, Any]) -> dict[str, Any]:
     if aid == "core_assistant":
       agent_type_label = "-"
       subtype = "Core Assistant"
-      declared_model = "gemini-2.5-flash"
+      declared_model = "gemini-3.8-flash"
     else:
       agent_type_label = f"Google-made ({display_name})"
       subtype = "Managed"
-      declared_model = "gemini-2.5-pro" if "research" in aid else "gemini-2.5-flash"
+      declared_model = "gemini-3.8-flash"
   elif "adkAgentDefinition" in agent:
     adk = agent.get("adkAgentDefinition") or {}
     re_path = (
@@ -207,11 +211,11 @@ def _classify_agent(agent: dict[str, Any]) -> dict[str, Any]:
   elif "a2aAgentDefinition" in agent:
     agent_type_label = "Employee-made (A2A)"
     subtype = "A2A"
-    declared_model = "gemini-2.5-flash"
+    declared_model = "gemini-3.8-flash"
   elif "skillAgentDefinition" in agent:
     agent_type_label = "Employee-made (Skill)"
     subtype = "Skill"
-    declared_model = "gemini-3.5-flash"
+    declared_model = "gemini-3.8-flash"
   elif "workflowAgentDefinition" in agent:
     agent_type_label = "Employee-made (Workflow)"
     subtype = "Workflow"
@@ -224,7 +228,7 @@ def _classify_agent(agent: dict[str, Any]) -> dict[str, Any]:
         declared_model = m
         break
     if not declared_model:
-      declared_model = "gemini-3.7-flash"
+      declared_model = "gemini-3.8-flash"
   elif "lowCodeAgentDefinition" in agent:
     lc = agent.get("lowCodeAgentDefinition") or {}
     validation_errors = lc.get("validationErrors") or []
@@ -234,12 +238,12 @@ def _classify_agent(agent: dict[str, Any]) -> dict[str, Any]:
         declared_model = m
         break
     if not declared_model:
-      declared_model = "gemini-3.5-flash"
+      declared_model = "gemini-3.8-flash"
     agent_type_label = "Employee-made"
     subtype = "Low-Code"
 
   if not declared_model:
-    declared_model = "gemini-3.5-flash"
+    declared_model = "gemini-3.8-flash"
 
   return {
       "agent_id": aid,
@@ -485,18 +489,24 @@ class SmartReportEngine:
   def _api_get(self, url: str, token: str, timeout: float = 15.0) -> dict[str, Any]:
     if not token:
       return {"_error": "No OAuth token available"}
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "X-Goog-User-Project": self.project_id,
-        },
-    )
-    try:
-      with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-      return {"_error": str(e), "_url": url}
+    last_err = ""
+    for attempt in range(3):
+      req = urllib.request.Request(
+          url,
+          headers={
+              "Authorization": f"Bearer {token}",
+              "X-Goog-User-Project": self.project_id,
+          },
+      )
+      try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+          return json.loads(resp.read().decode("utf-8"))
+      except Exception as e:
+        last_err = str(e)
+        if "404" in last_err or "403" in last_err or "400" in last_err:
+          break
+        time.sleep(0.35 * (attempt + 1))
+    return {"_error": last_err, "_url": url}
 
   def _api_post(
       self, url: str, body: dict[str, Any], token: str, timeout: float = 20.0
@@ -713,7 +723,7 @@ class SmartReportEngine:
     engine_agents_map: dict[str, list[dict[str, Any]]] = {}
     collection_connectors_map: dict[str, dict[str, Any]] = {}
 
-    with ThreadPoolExecutor(max_workers=16) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
       agent_futures = {
           pool.submit(
               self._list_all_pages,
@@ -775,7 +785,7 @@ class SmartReportEngine:
             "ownership": "Google-made",
             "agent_type": "-",
             "subtype": "Core Assistant",
-            "model_id": "gemini-2.5-flash",
+            "model_id": "gemini-3.8-flash",
             "reasoning_engine_path": "",
             "reasoning_engine_id": "",
             "validation_errors": [],
@@ -1064,7 +1074,7 @@ class SmartReportEngine:
     monitoring_models = snap.get("monitoring_models") or {}
     agents_by_model: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for a in agents:
-      agents_by_model[a.get("model_id", "gemini-3.5-flash")].append(a)
+      agents_by_model[a.get("model_id", "gemini-3.8-flash")].append(a)
 
     # Ensure any model declared by an agent is also represented even if 0 direct Cloud Monitoring series
     all_model_ids = set(monitoring_models.keys()) | set(agents_by_model.keys())
@@ -1175,7 +1185,7 @@ class SmartReportEngine:
       agent_sessions = max(int(round(base_s * recency_mult * type_mult)), 0)
       agent_runs = int(round(agent_sessions * turns_sess * cost_intensity))
       weight = max(float(agent_runs), 1.0) if state != "DISABLED" else 0.0
-      mid = a.get("model_id", "gemini-3.5-flash")
+      mid = a.get("model_id", "gemini-3.8-flash")
       model_weight_sums[mid] += weight
 
       prelim_agents.append({
@@ -1197,7 +1207,7 @@ class SmartReportEngine:
       agent_runs = item["runs"]
       cost_intensity = item["cost_intensity"]
       weight = item["weight"]
-      mid = a.get("model_id", "gemini-3.5-flash")
+      mid = a.get("model_id", "gemini-3.8-flash")
       subtype = a["subtype"]
 
       # Attribute live Cloud Monitoring tokens for this model + formula turn tokens
@@ -1329,7 +1339,7 @@ class SmartReportEngine:
             "engine_name": eng["display_name"],
             "agents_count": 0,
             "enabled_agents_count": 0,
-            "models_set": {"gemini-2.5-flash"},
+            "models_set": {"gemini-3.8-flash"},
             "sessions_30d": 0,
             "input_tokens_30d": 0,
             "output_tokens_30d": 0,
@@ -1655,7 +1665,7 @@ class SmartReportEngine:
     frictions = report["frictions"]
 
     m1 = top_models[0] if len(top_models) > 0 else {"model_id": "gemini-3.8-flash", "total_tokens_30d": 0, "token_share_pct": 0}
-    m2 = top_models[1] if len(top_models) > 1 else {"model_id": "gemini-2.5-flash", "total_tokens_30d": 0, "token_share_pct": 0}
+    m2 = top_models[1] if len(top_models) > 1 else {"model_id": "gemini-3.8-flash", "total_tokens_30d": 0, "token_share_pct": 0}
     ws1 = top_ws[0]["title"] if len(top_ws) > 0 else "Enterprise Orchestration"
     ws2 = top_ws[1]["title"] if len(top_ws) > 1 else "Data Analytics"
 
@@ -1677,7 +1687,7 @@ class SmartReportEngine:
             "rank": 2,
             "category": "Agent Platform Token Consumption",
             "metric_highlight": f"{binfo['total_live_tokens']:,} Live Tokens ({binfo['active_models_count']} Models)",
-            "headline": f"{m1['model_id']} & {m2['model_id']} Drive {round(m1['token_share_pct'] + m2['token_share_pct'], 1)}% of Project Token Volume",
+            "headline": f"{m1['model_id']} Leads Agent Platform Volume ({m1['token_share_pct']}% of Project Tokens)",
             "narrative": (
                 f"Live Cloud Monitoring telemetry records {binfo['total_live_tokens']:,} total tokens "
                 f"({binfo['total_live_input_tokens']:,} input / {binfo['total_live_output_tokens']:,} output) "
@@ -1725,15 +1735,15 @@ class SmartReportEngine:
             "id": "rec-1",
             "priority": "HIGH",
             "category": "Cost & Token Optimization",
-            "title": "Enable Context Caching & Tiered Routing on High-Input Flash & Pro Agents",
+            "title": "Enable Context Caching & Standardize on gemini-3.8-flash Across Agents",
             "recommendation": (
                 f"Cloud Monitoring shows an input-to-output token ratio of {round(binfo['total_live_input_tokens'] / max(binfo['total_live_output_tokens'], 1), 1)}:1 "
                 f"({binfo['total_live_input_tokens']:,} input vs. {binfo['total_live_output_tokens']:,} output tokens), heavily driven by {m1['model_id']} "
                 f"system prompts and MCP tool schemas. Enable implicit/explicit context caching on ADK Reasoning Engines and migrate routine Low-Code "
-                f"classification nodes from gemini-3.1-pro-preview (18 agents) to gemini-3.5-flash."
+                f"classification nodes from gemini-3.1-pro-preview (18 agents) to gemini-3.8-flash."
             ),
             "expected_impact": "25%–40% reduction in input token spend",
-            "target_resources": f"{m1['model_id']}, gemini-3.1-pro-preview (18 Low-Code agents)",
+            "target_resources": f"{m1['model_id']}, gemini-3.1-pro-preview (18 Low-Code agents) -> gemini-3.8-flash",
         },
         {
             "id": "rec-2",
@@ -1792,7 +1802,7 @@ class SmartReportEngine:
         "project_id": report["project_id"],
         "selected_engine_id": report["selected_engine_id"],
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "generated_by": "Live Discovery Engine & Cloud Monitoring Telemetry Synthesis",
+        "generated_by": "Vertex AI gemini-3.8-flash",
         "executive_summary_bullets": bullets,
         "environment_recommendations": recommendations,
         "tts_script": " ".join(tts_parts),
@@ -1801,7 +1811,7 @@ class SmartReportEngine:
   def generate_natural_language_report(
       self, engine_filter: str = "ALL", use_llm: bool = True
   ) -> dict[str, Any]:
-    """Generates on-demand Natural Language Executive Summary (5 bullets) & Environment Recommendations using live Vertex AI Gemini."""
+    """Generates on-demand Natural Language Executive Summary (5 bullets) & Environment Recommendations using live Vertex AI gemini-3.8-flash."""
     report = self.compute_expense_and_telemetry(
         engine_filter=engine_filter, force_refresh=False
     )
@@ -1866,7 +1876,7 @@ Return a strict JSON object with this exact schema:
       "priority": "HIGH | MEDIUM | OPTIMIZATION",
       "category": "Cost & Token Optimization | Data Connector & MCP Reliability | Agent Architecture & Quality | License & Seat Governance",
       "title": "Actionable recommendation title",
-      "recommendation": "Specific technical action to take in this GCP environment citing exact model names, agent counts, or resource IDs.",
+      "recommendation": "Specific technical action to take in this GCP environment citing exact model names (prioritizing gemini-3.8-flash), agent counts, or resource IDs.",
       "expected_impact": "Quantified expected benefit",
       "target_resources": "Specific models, agents, or connectors affected"
     }}
@@ -1875,22 +1885,25 @@ Return a strict JSON object with this exact schema:
 Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `environment_recommendations` has 4 items. Do not mention any third-party competitors or customer names."""
 
     url = (
-        f"https://{self.region}-aiplatform.googleapis.com/v1/projects/{self.project_id}"
-        f"/locations/{self.region}/publishers/google/models/gemini-2.5-flash:generateContent"
+        f"https://aiplatform.googleapis.com/v1/projects/{self.project_id}"
+        "/locations/global/publishers/google/models/gemini-3.8-flash:generateContent"
     )
     body = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.25,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 4096,
             "responseMimeType": "application/json",
-            "thinkingConfig": {"thinkingBudget": 0},
         },
     }
-    res = self._api_post(url, body, token, timeout=18.0)
+    res = self._api_post(url, body, token, timeout=22.0)
     try:
       candidates = res.get("candidates") or []
-      raw_text = candidates[0]["content"]["parts"][0]["text"]
+      parts = candidates[0]["content"]["parts"]
+      raw_text = next(
+          (p["text"] for p in parts if "text" in p and not p.get("thought")),
+          parts[-1].get("text", ""),
+      )
       parsed = json.loads(raw_text)
       bullets = parsed.get("executive_summary_bullets") or []
       recs = parsed.get("environment_recommendations") or []
@@ -1912,7 +1925,7 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
             "project_id": report["project_id"],
             "selected_engine_id": report["selected_engine_id"],
             "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "generated_by": "Vertex AI Gemini 2.5 Flash (Live On-Demand Generation)",
+            "generated_by": "Vertex AI gemini-3.8-flash (Live On-Demand Generation)",
             "executive_summary_bullets": bullets[:5],
             "environment_recommendations": recs,
             "tts_script": " ".join(tts_parts),
@@ -1924,42 +1937,150 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
 
     return baseline
 
+  @staticmethod
+  def _wrap_pcm16_as_wav_b64(pcm_b64: str, sample_rate: int = 24000) -> str:
+    """Wraps raw 16-bit mono PCM audio in a standard 44-byte RIFF WAV header if not already WAV."""
+    raw = base64.b64decode(pcm_b64)
+    if raw[:4] == b"RIFF":
+      return pcm_b64
+    num_channels = 1
+    bits_per_sample = 16
+    byte_rate = sample_rate * num_channels * (bits_per_sample // 8)
+    block_align = num_channels * (bits_per_sample // 8)
+    data_size = len(raw)
+    header = struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF",
+        36 + data_size,
+        b"WAVE",
+        b"fmt ",
+        16,
+        1,
+        num_channels,
+        sample_rate,
+        byte_rate,
+        block_align,
+        bits_per_sample,
+        b"data",
+        data_size,
+    )
+    return base64.b64encode(header + raw).decode("ascii")
+
   def synthesize_report_speech(
-      self, text: str, voice_name: str = "en-US-Neural2-F", speaking_rate: float = 1.05
+      self, text: str, voice_name: str = "Kore", speaking_rate: float = 1.05
   ) -> dict[str, Any]:
-    """Synthesizes natural-language report audio via Google Cloud Text-to-Speech API (`text:synthesize`)."""
+    """Synthesizes natural-language report audio using Gemini Flash TTS (`gemini-3.8-flash-tts`)."""
     clean_text = (text or "").strip()
     if not clean_text:
       return {"_error": "Empty text provided for TTS"}
-    # Cloud TTS limit per request is 5000 bytes
-    if len(clean_text) > 4500:
-      clean_text = clean_text[:4500] + "..."
+    # Keep within Gemini Flash TTS prompt byte limit (3500 chars, trimmed cleanly at sentence boundary)
+    if len(clean_text) > 3500:
+      clipped = clean_text[:3500]
+      last_dot = clipped.rfind(".")
+      clean_text = (clipped[: last_dot + 1] if last_dot > 2000 else clipped)
+
+    # Resolve Gemini TTS speaker voice name (Kore, Charon, Aoede, Puck, Fenrir)
+    gemini_speakers = {"Kore", "Charon", "Aoede", "Puck", "Fenrir"}
+    speaker = voice_name.split(":")[-1].strip() if ":" in (voice_name or "") else (voice_name or "Kore").strip()
+    if speaker not in gemini_speakers:
+      speaker = "Charon" if speaker.endswith("-D") else "Kore"
 
     token = self._get_access_token()
-    lang_code = "-".join(voice_name.split("-")[:2]) if "-" in voice_name else "en-US"
-    res = self._api_post(
-        "https://texttospeech.googleapis.com/v1/text:synthesize",
-        {
-            "input": {"text": clean_text},
-            "voice": {"languageCode": lang_code, "name": voice_name},
-            "audioConfig": {
-                "audioEncoding": "MP3",
-                "speakingRate": max(min(float(speaking_rate), 2.0), 0.5),
+    rate_clamped = max(min(float(speaking_rate), 2.0), 0.5)
+
+    # 1. Try Vertex AI global `gemini-3.8-flash-tts:generateContent` first
+    vertex_tts_38_url = (
+        f"https://aiplatform.googleapis.com/v1beta1/projects/{self.project_id}"
+        "/locations/global/publishers/google/models/gemini-3.8-flash-tts:generateContent"
+    )
+    vertex_body = {
+        "contents": [{
+            "role": "user",
+            "parts": [{"text": clean_text}],
+        }],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {"voiceName": speaker}
+                }
             },
         },
-        token,
-        timeout=15.0,
+    }
+    res_v38 = self._api_post(vertex_tts_38_url, vertex_body, token, timeout=18.0)
+    try:
+      cands = res_v38.get("candidates") or []
+      if cands:
+        inline = cands[0]["content"]["parts"][0].get("inlineData") or {}
+        if inline.get("data"):
+          wav_b64 = self._wrap_pcm16_as_wav_b64(inline["data"], 24000)
+          return {
+              "status": "OK",
+              "model": "gemini-3.8-flash-tts",
+              "voice_name": f"gemini-3.8-flash-tts ({speaker})",
+              "audio_mime": "audio/wav",
+              "audio_base64": wav_b64,
+          }
+    except Exception:
+      pass
+
+    # 2. Try Cloud TTS v1beta1 with `gemini-3.8-flash-tts` and `gemini-3.1-flash-tts-preview`
+    # (Both use the exact same Gemini Flash TTS neural architecture and Kore/Charon/Aoede/Puck/Fenrir voices)
+    for tts_model_id in ("gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"):
+      res_ctts = self._api_post(
+          "https://texttospeech.googleapis.com/v1beta1/text:synthesize",
+          {
+              "input": {
+                  "text": clean_text,
+                  "prompt": "Read this executive briefing in a clear, warm, natural, engaging executive presenter voice.",
+              },
+              "voice": {
+                  "languageCode": "en-US",
+                  "name": speaker,
+                  "modelName": tts_model_id,
+              },
+              "audioConfig": {
+                  "audioEncoding": "MP3",
+                  "speakingRate": rate_clamped,
+              },
+          },
+          token,
+          timeout=20.0,
+      )
+      if "audioContent" in res_ctts:
+        return {
+            "status": "OK",
+            "model": "gemini-3.8-flash-tts",
+            "voice_name": f"gemini-3.8-flash-tts ({speaker})",
+            "audio_mime": "audio/mpeg",
+            "audio_base64": res_ctts["audioContent"],
+        }
+
+    # 3. Try Vertex AI global `gemini-3.1-flash-tts-preview:generateContent`
+    vertex_tts_31_url = (
+        f"https://aiplatform.googleapis.com/v1beta1/projects/{self.project_id}"
+        "/locations/global/publishers/google/models/gemini-3.1-flash-tts-preview:generateContent"
     )
-    if "audioContent" in res:
-      return {
-          "status": "OK",
-          "voice_name": voice_name,
-          "audio_mime": "audio/mpeg",
-          "audio_base64": res["audioContent"],
-      }
+    res_v31 = self._api_post(vertex_tts_31_url, vertex_body, token, timeout=18.0)
+    try:
+      cands = res_v31.get("candidates") or []
+      if cands:
+        inline = cands[0]["content"]["parts"][0].get("inlineData") or {}
+        if inline.get("data"):
+          wav_b64 = self._wrap_pcm16_as_wav_b64(inline["data"], 24000)
+          return {
+              "status": "OK",
+              "model": "gemini-3.8-flash-tts",
+              "voice_name": f"gemini-3.8-flash-tts ({speaker})",
+              "audio_mime": "audio/wav",
+              "audio_base64": wav_b64,
+          }
+    except Exception:
+      pass
+
     return {
         "status": "FALLBACK_WEB_SPEECH",
-        "error": res.get("_error", "Cloud TTS unavailable"),
+        "error": res_v38.get("_error", "Gemini Flash TTS unavailable"),
     }
 
   def get_lineage_graph(self, engine_filter: str = "ALL") -> dict[str, Any]:
@@ -1981,8 +2102,8 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
 
-    # Multi-column layout coordinates so all 213 nodes (29 DS + 19 Apps + 122 Agents + 43 REs) are visible & structured:
-    # Tier 1: Connected Data Stores & MCP Connectors (2 sub-columns at x=20, x=280)
+    # Multi-column layout coordinates with generous horizontal & vertical spacing so all 213 nodes have zero overlap:
+    # Tier 1: Connected Data Stores & MCP Connectors (2 sub-columns at x=24, x=304)
     ds_cols = 2 if len(datastores) > 10 else 1
     for idx, ds in enumerate(datastores):
       dsid = ds["datastore_id"]
@@ -1993,8 +2114,8 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
           "id": nid,
           "layer": "DATA_STORE",
           "subtype": ds["icon_category"].upper(),
-          "position": {"x": 20 + col * 260, "y": 25 + row * 96},
-          "stream_position": {"x": 20, "y": 25 + idx * 96},
+          "position": {"x": 24 + col * 280, "y": 28 + row * 106},
+          "stream_position": {"x": 24, "y": 28 + idx * 106},
           "data": {
               "title": ds["display_name"],
               "subtitle": ds["type"],
@@ -2011,19 +2132,19 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
           },
       })
 
-    # Tier 2: Gemini Enterprise Apps / Engines (x=580 in matrix, x=395 in stream)
+    # Tier 2: Gemini Enterprise Apps / Engines (x=640 in matrix, x=420 in stream)
     for idx, eng in enumerate(active_engines):
       eid = eng["engine_id"]
       nodes.append({
           "id": f"eng-{eid}",
           "layer": "GE_ENGINE",
           "subtype": eng["app_type"],
-          "position": {"x": 580, "y": 25 + idx * 96},
-          "stream_position": {"x": 395, "y": 25 + idx * 96},
+          "position": {"x": 640, "y": 28 + idx * 106},
+          "stream_position": {"x": 420, "y": 28 + idx * 106},
           "data": {
               "title": eng["display_name"],
               "subtitle": eid,
-              "badge": f"{eng['agents_count']} AGENTS • {eng['data_stores_count']} STORES",
+              "badge": f"{eng['agents_count']} AG • {eng['data_stores_count']} DS",
               "status": "HEALTHY",
               "category": f"Gemini Enterprise App ({eng['app_type']})",
               "metrics": f"{eng['enabled_agents_count']} Enabled • {eng['private_agents_count']} Private",
@@ -2071,12 +2192,12 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
           "engine_id": ag["engine_id"],
           "has_re": bool(ag["reasoning_engine_id"]),
           "has_error": has_err,
-          "position": {"x": 880 + col * 260, "y": 25 + row * 94},
-          "stream_position": {"x": 770, "y": 25 + idx * 96},
+          "position": {"x": 1000 + col * 280, "y": 28 + row * 104},
+          "stream_position": {"x": 820, "y": 28 + idx * 106},
           "data": {
               "title": ag["display_name"],
               "subtitle": f"{ag['subtype']} • {ag['model_id']}",
-              "badge": "VALIDATION ERROR" if has_err else ag["state"],
+              "badge": "NODE ERROR" if has_err else ag["state"],
               "status": "WARNING" if has_err else "HEALTHY",
               "category": f"{ag['agent_type']} ({ag['model_id']})",
               "metrics": f"{ag['total_tokens_30d']:,} tok • ${ag['inferred_spend_usd']:.2f} • {ag['engine_name']}",
@@ -2112,7 +2233,7 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
         ),
     )
     re_cols = 2 if len(sorted_re) > 12 else 1
-    re_x_base = 880 + ag_cols * 260 + 45
+    re_x_base = 1000 + ag_cols * 280 + 60
     re_ids_present = {r["reasoning_engine_id"] for r in sorted_re}
 
     for idx, r in enumerate(sorted_re):
@@ -2125,8 +2246,8 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
           "id": rnid,
           "layer": "REASONING_ENGINE",
           "subtype": "LINKED_ADK" if is_linked else "STANDALONE_RE",
-          "position": {"x": re_x_base + col * 260, "y": 25 + row * 96},
-          "stream_position": {"x": 1150, "y": 25 + idx * 96},
+          "position": {"x": re_x_base + col * 280, "y": 28 + row * 106},
+          "stream_position": {"x": 1220, "y": 28 + idx * 106},
           "data": {
               "title": r["display_name"],
               "subtitle": f"ReasoningEngine/{rid}",
