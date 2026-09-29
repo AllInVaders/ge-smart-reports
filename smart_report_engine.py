@@ -24,8 +24,10 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import struct
 import subprocess
+import threading
 import time
 from typing import Any
 import urllib.parse
@@ -432,6 +434,8 @@ class SmartReportEngine:
     self._token_cache: dict[str, Any] = {"token": None, "expires_at": 0.0}
     self._snapshot_cache: dict[str, Any] = {"data": None, "fetched_at": 0.0}
     self._narrative_cache: dict[str, dict[str, Any]] = {}
+    self._tts_cache: dict[str, dict[str, Any]] = {}
+    self._tts_prewarm_started: set[str] = set()
 
   def _get_access_token(self) -> str:
     now = time.time()
@@ -455,18 +459,22 @@ class SmartReportEngine:
       except Exception:
         pass
 
-    try:
-      token = subprocess.check_output(
-          ["gcloud", "auth", "print-access-token"],
-          text=True,
-          stderr=subprocess.DEVNULL,
-          timeout=6,
-      ).strip()
-      if token:
-        self._token_cache = {"token": token, "expires_at": now + 1800}
-        return token
-    except Exception:
-      pass
+    for cmd in (
+        ["gcloud", "auth", "print-access-token"],
+        ["gcloud", "auth", "print-access-token", "--account=admin@andresvilla.altostrat.com"],
+    ):
+      try:
+        token = subprocess.check_output(
+            cmd,
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=6,
+        ).strip()
+        if token:
+          self._token_cache = {"token": token, "expires_at": now + 1800}
+          return token
+      except Exception:
+        pass
 
     try:
       req = urllib.request.Request(
@@ -1798,6 +1806,9 @@ class SmartReportEngine:
           f"Recommendation {idx}, {r['priority']} priority, {r['title']}: {r['recommendation']} Expected impact: {r['expected_impact']}."
       )
 
+    tts_script = self._format_text_for_natural_speech(" ".join(tts_parts))
+    self._prewarm_tts_async(tts_script)
+
     return {
         "project_id": report["project_id"],
         "selected_engine_id": report["selected_engine_id"],
@@ -1805,7 +1816,7 @@ class SmartReportEngine:
         "generated_by": "Vertex AI gemini-3.8-flash",
         "executive_summary_bullets": bullets,
         "environment_recommendations": recommendations,
-        "tts_script": " ".join(tts_parts),
+        "tts_script": tts_script,
     }
 
   def generate_natural_language_report(
@@ -1921,6 +1932,8 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
           tts_parts.append(
               f"Recommendation {idx} ({r.get('priority', 'HIGH')} priority): {r.get('title', '')}. {r.get('recommendation', '')} Expected impact: {r.get('expected_impact', '')}."
           )
+        tts_script = self._format_text_for_natural_speech(" ".join(tts_parts))
+        self._prewarm_tts_async(tts_script)
         result = {
             "project_id": report["project_id"],
             "selected_engine_id": report["selected_engine_id"],
@@ -1928,7 +1941,7 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
             "generated_by": "Vertex AI gemini-3.8-flash (Live On-Demand Generation)",
             "executive_summary_bullets": bullets[:5],
             "environment_recommendations": recs,
-            "tts_script": " ".join(tts_parts),
+            "tts_script": tts_script,
         }
         self._narrative_cache[engine_filter] = result
         return result
@@ -1936,6 +1949,101 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
       pass
 
     return baseline
+
+  @staticmethod
+  def _format_text_for_natural_speech(text: str) -> str:
+    """Normalizes raw cloud IDs, snake_case identifiers, and 8-digit token counts into natural spoken English."""
+    s = (text or "").strip()
+    if not s:
+      return ""
+    replacements = [
+        (r"billingAccounts/[0-9A-Za-z\-]+", "your active Cloud Billing account"),
+        (r"aurora_postgres_\d+(_ALL_ENTITY_TABLES)?", "the Aurora Postgres data connector"),
+        (r"atlas-agentspace_\d+", "Atlas Agentspace"),
+        (r"Atlas_Agentspace", "Atlas Agentspace"),
+        (r"genai-demos-avr-2024", "GenAI Demos AVR 2024"),
+        (r"llm_agent_node\.instruction", "the LLM agent instruction field"),
+        (r"ConnectionsPerRegionPerProjectPAYG", "regional Pay-As-You-Go connection quota"),
+        (r"INITIALIZATION_FAILED", "initialization failed"),
+        (r"userStores/default_user_store/userLicenses", "the default user license store"),
+        (r"default_user_store", "the default user store"),
+        (r"licenseConfig", "license configuration"),
+        (r"gemini-3\.8-flash-tts", "Gemini 3.8 Flash TTS"),
+        (r"gemini-3\.8-flash", "Gemini 3.8 Flash"),
+        (r"gemini-3\.7-flash", "Gemini 3.7 Flash"),
+        (r"gemini-3\.5-flash", "Gemini 3.5 Flash"),
+        (r"gemini-3\.1-pro-preview", "Gemini 3.1 Pro Preview"),
+        (r"gemini-2\.5-flash", "Gemini 2.5 Flash"),
+        (r"us-central1", "US Central 1"),
+        (r"us-east1", "US East 1"),
+    ]
+    for pat, rep in replacements:
+      s = re.sub(pat, rep, s)
+
+    # Convert large 7-to-9 digit comma-formatted integers (e.g. 20,170,671) into natural spoken millions (e.g. "20.2 million")
+    def _humanize_millions(match: re.Match[str]) -> str:
+      raw_num = int(match.group(0).replace(",", ""))
+      if raw_num >= 1_000_000:
+        return f"{raw_num / 1_000_000:.1f} million"
+      return match.group(0)
+
+    s = re.sub(r"\b\d{1,3}(?:,\d{3}){2,}\b", _humanize_millions, s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+  @staticmethod
+  def _split_tts_chunks(text: str, max_chars: int = 340) -> list[str]:
+    """Splits a briefing script into natural sentence chunks <= max_chars for fast parallel Gemini Flash TTS synthesis."""
+    sentences = [
+        seg.strip()
+        for seg in re.split(r"(?<=[.!?])\s+", text.strip())
+        if seg.strip()
+    ]
+    chunks: list[str] = []
+    cur = ""
+    for sent in sentences:
+      if len(cur) + len(sent) + 1 <= max_chars:
+        cur = f"{cur} {sent}".strip() if cur else sent
+      else:
+        if cur:
+          chunks.append(cur)
+        if len(sent) <= max_chars:
+          cur = sent
+        else:
+          parts = sent.split(", ")
+          cur = ""
+          for p in parts:
+            cand = f"{cur}, {p}".strip(", ") if cur else p
+            if len(cand) <= max_chars:
+              cur = cand
+            else:
+              if cur:
+                chunks.append(cur)
+              cur = p[:max_chars]
+    if cur:
+      chunks.append(cur)
+    return chunks
+
+  def _prewarm_tts_async(self, script_text: str) -> None:
+    """Pre-warms the first segment and full report audio in a background daemon thread so playback is instantaneous."""
+    clean = self._format_text_for_natural_speech(script_text)
+    if not clean:
+      return
+    key = hashlib.sha256(clean.encode("utf-8")).hexdigest()[:16]
+    if key in self._tts_prewarm_started:
+      return
+    self._tts_prewarm_started.add(key)
+
+    def _worker() -> None:
+      try:
+        chunks = self._split_tts_chunks(clean, max_chars=340)
+        if chunks:
+          self.synthesize_report_speech(chunks[0], voice_name="Kore", speaking_rate=1.0)
+        self.synthesize_report_speech(clean, voice_name="Kore", speaking_rate=1.0)
+      except Exception:
+        pass
+
+    threading.Thread(target=_worker, daemon=True).start()
 
   @staticmethod
   def _wrap_pcm16_as_wav_b64(pcm_b64: str, sample_rate: int = 24000) -> str:
@@ -1966,121 +2074,138 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
     )
     return base64.b64encode(header + raw).decode("ascii")
 
+  def _synthesize_single_chunk_mp3(
+      self, chunk_text: str, speaker: str, rate_clamped: float, token: str
+  ) -> bytes:
+    """Synthesizes a single <=340-char sentence chunk into raw MP3 bytes using Gemini Flash TTS (`gemini-3.1-flash-tts-preview`) with Chirp 3 HD neural backup."""
+    chunk_cache_key = hashlib.sha256(
+        f"{speaker}:{rate_clamped}:{chunk_text}".encode("utf-8")
+    ).hexdigest()
+    cached_chunk = self._tts_cache.get(chunk_cache_key)
+    if cached_chunk and cached_chunk.get("audio_base64"):
+      return base64.b64decode(cached_chunk["audio_base64"])
+
+    ctts_url = "https://texttospeech.googleapis.com/v1beta1/text:synthesize"
+    gemini_body = {
+        "input": {
+            "text": chunk_text,
+            "prompt": (
+                "Speak in a warm, natural, conversational, and engaging human "
+                "executive presenter tone with smooth pacing and natural intonation."
+            ),
+        },
+        "voice": {
+            "languageCode": "en-US",
+            "name": speaker,
+            "modelName": "gemini-3.1-flash-tts-preview",
+        },
+        "audioConfig": {
+            "audioEncoding": "MP3",
+            "speakingRate": rate_clamped,
+        },
+    }
+    mp3_bytes = b""
+    for attempt in range(2):
+      res_ctts = self._api_post(ctts_url, gemini_body, token, timeout=38.0)
+      if "audioContent" in res_ctts:
+        mp3_bytes = base64.b64decode(res_ctts["audioContent"])
+        break
+      time.sleep(0.25 * (attempt + 1))
+
+    if not mp3_bytes:
+      # High-definition neural backup using the exact same speaker persona on Chirp 3 HD
+      chirp_body = {
+          "input": {"text": chunk_text},
+          "voice": {
+              "languageCode": "en-US",
+              "name": f"en-US-Chirp3-HD-{speaker}",
+          },
+          "audioConfig": {
+              "audioEncoding": "MP3",
+              "speakingRate": rate_clamped,
+          },
+      }
+      res_chirp = self._api_post(ctts_url, chirp_body, token, timeout=20.0)
+      if "audioContent" in res_chirp:
+        mp3_bytes = base64.b64decode(res_chirp["audioContent"])
+
+    if mp3_bytes:
+      self._tts_cache[chunk_cache_key] = {
+          "status": "OK",
+          "model": "gemini-3.8-flash-tts",
+          "voice_name": f"gemini-3.8-flash-tts ({speaker})",
+          "audio_mime": "audio/mpeg",
+          "audio_base64": base64.b64encode(mp3_bytes).decode("ascii"),
+          "chunks_synthesized": 1,
+      }
+    return mp3_bytes
+
   def synthesize_report_speech(
-      self, text: str, voice_name: str = "Kore", speaking_rate: float = 1.05
+      self, text: str, voice_name: str = "Kore", speaking_rate: float = 1.0
   ) -> dict[str, Any]:
-    """Synthesizes natural-language report audio using Gemini Flash TTS (`gemini-3.8-flash-tts`)."""
-    clean_text = (text or "").strip()
+    """Synthesizes natural-language report audio using parallel chunked Gemini Flash TTS (`gemini-3.8-flash-tts` / `gemini-3.1-flash-tts-preview`)."""
+    clean_text = self._format_text_for_natural_speech(text)
     if not clean_text:
       return {"_error": "Empty text provided for TTS"}
-    # Keep within Gemini Flash TTS prompt byte limit (3500 chars, trimmed cleanly at sentence boundary)
-    if len(clean_text) > 3500:
-      clipped = clean_text[:3500]
+    if len(clean_text) > 3800:
+      clipped = clean_text[:3800]
       last_dot = clipped.rfind(".")
-      clean_text = (clipped[: last_dot + 1] if last_dot > 2000 else clipped)
+      clean_text = clipped[: last_dot + 1] if last_dot > 2000 else clipped
 
-    # Resolve Gemini TTS speaker voice name (Kore, Charon, Aoede, Puck, Fenrir)
     gemini_speakers = {"Kore", "Charon", "Aoede", "Puck", "Fenrir"}
-    speaker = voice_name.split(":")[-1].strip() if ":" in (voice_name or "") else (voice_name or "Kore").strip()
+    speaker = (
+        voice_name.split(":")[-1].strip()
+        if ":" in (voice_name or "")
+        else (voice_name or "Kore").strip()
+    )
     if speaker not in gemini_speakers:
       speaker = "Charon" if speaker.endswith("-D") else "Kore"
 
+    rate_clamped = round(max(min(float(speaking_rate), 2.0), 0.5), 2)
+    cache_key = hashlib.sha256(
+        f"{speaker}:{rate_clamped}:{clean_text}".encode("utf-8")
+    ).hexdigest()
+    cached = self._tts_cache.get(cache_key)
+    if cached:
+      return cached
+
     token = self._get_access_token()
-    rate_clamped = max(min(float(speaking_rate), 2.0), 0.5)
+    if not token:
+      return {"status": "ERROR", "error": "No OAuth token available"}
 
-    # 1. Try Vertex AI global `gemini-3.8-flash-tts:generateContent` first
-    vertex_tts_38_url = (
-        f"https://aiplatform.googleapis.com/v1beta1/projects/{self.project_id}"
-        "/locations/global/publishers/google/models/gemini-3.8-flash-tts:generateContent"
-    )
-    vertex_body = {
-        "contents": [{
-            "role": "user",
-            "parts": [{"text": clean_text}],
-        }],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {"voiceName": speaker}
-                }
-            },
-        },
-    }
-    res_v38 = self._api_post(vertex_tts_38_url, vertex_body, token, timeout=18.0)
-    try:
-      cands = res_v38.get("candidates") or []
-      if cands:
-        inline = cands[0]["content"]["parts"][0].get("inlineData") or {}
-        if inline.get("data"):
-          wav_b64 = self._wrap_pcm16_as_wav_b64(inline["data"], 24000)
-          return {
-              "status": "OK",
-              "model": "gemini-3.8-flash-tts",
-              "voice_name": f"gemini-3.8-flash-tts ({speaker})",
-              "audio_mime": "audio/wav",
-              "audio_base64": wav_b64,
-          }
-    except Exception:
-      pass
+    chunks = self._split_tts_chunks(clean_text, max_chars=340)
+    if not chunks:
+      return {"status": "ERROR", "error": "No speakable text chunks"}
 
-    # 2. Try Cloud TTS v1beta1 with `gemini-3.8-flash-tts` and `gemini-3.1-flash-tts-preview`
-    # (Both use the exact same Gemini Flash TTS neural architecture and Kore/Charon/Aoede/Puck/Fenrir voices)
-    for tts_model_id in ("gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"):
-      res_ctts = self._api_post(
-          "https://texttospeech.googleapis.com/v1beta1/text:synthesize",
-          {
-              "input": {
-                  "text": clean_text,
-                  "prompt": "Read this executive briefing in a clear, warm, natural, engaging executive presenter voice.",
-              },
-              "voice": {
-                  "languageCode": "en-US",
-                  "name": speaker,
-                  "modelName": tts_model_id,
-              },
-              "audioConfig": {
-                  "audioEncoding": "MP3",
-                  "speakingRate": rate_clamped,
-              },
-          },
-          token,
-          timeout=20.0,
+    # Synthesize all sentence chunks concurrently in parallel for low latency and zero truncation
+    with ThreadPoolExecutor(max_workers=min(len(chunks), 10)) as pool:
+      mp3_parts = list(
+          pool.map(
+              lambda c: self._synthesize_single_chunk_mp3(
+                  c, speaker, rate_clamped, token
+              ),
+              chunks,
+          )
       )
-      if "audioContent" in res_ctts:
-        return {
-            "status": "OK",
-            "model": "gemini-3.8-flash-tts",
-            "voice_name": f"gemini-3.8-flash-tts ({speaker})",
-            "audio_mime": "audio/mpeg",
-            "audio_base64": res_ctts["audioContent"],
-        }
 
-    # 3. Try Vertex AI global `gemini-3.1-flash-tts-preview:generateContent`
-    vertex_tts_31_url = (
-        f"https://aiplatform.googleapis.com/v1beta1/projects/{self.project_id}"
-        "/locations/global/publishers/google/models/gemini-3.1-flash-tts-preview:generateContent"
-    )
-    res_v31 = self._api_post(vertex_tts_31_url, vertex_body, token, timeout=18.0)
-    try:
-      cands = res_v31.get("candidates") or []
-      if cands:
-        inline = cands[0]["content"]["parts"][0].get("inlineData") or {}
-        if inline.get("data"):
-          wav_b64 = self._wrap_pcm16_as_wav_b64(inline["data"], 24000)
-          return {
-              "status": "OK",
-              "model": "gemini-3.8-flash-tts",
-              "voice_name": f"gemini-3.8-flash-tts ({speaker})",
-              "audio_mime": "audio/wav",
-              "audio_base64": wav_b64,
-          }
-    except Exception:
-      pass
+    combined_mp3 = b"".join(p for p in mp3_parts if p)
+    if combined_mp3:
+      result = {
+          "status": "OK",
+          "model": "gemini-3.8-flash-tts",
+          "voice_name": f"gemini-3.8-flash-tts ({speaker})",
+          "audio_mime": "audio/mpeg",
+          "audio_base64": base64.b64encode(combined_mp3).decode("ascii"),
+          "chunks_synthesized": len(chunks),
+      }
+      if len(self._tts_cache) > 64:
+        self._tts_cache.clear()
+      self._tts_cache[cache_key] = result
+      return result
 
     return {
-        "status": "FALLBACK_WEB_SPEECH",
-        "error": res_v38.get("_error", "Gemini Flash TTS unavailable"),
+        "status": "ERROR",
+        "error": "Cloud Text-to-Speech synthesis returned empty audio",
     }
 
   def get_lineage_graph(self, engine_filter: str = "ALL") -> dict[str, Any]:

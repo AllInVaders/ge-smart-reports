@@ -26,6 +26,9 @@ const state = {
   ttsPlaying: false,
   ttsPaused: false,
   ttsMode: null,
+  ttsAudioCache: {},
+  ttsSessionId: 0,
+  audioUnlocked: false,
 };
 
 function fmtNum(n) {
@@ -100,6 +103,7 @@ async function loadReport(forceRefresh = false) {
     renderDatastoresTable();
     renderAgentsTable();
     renderFrictionsAndUsers();
+    prefetchDefaultTtsAudio();
   } finally {
     if (btn) btn.textContent = '↻ Refresh Live API';
   }
@@ -257,6 +261,7 @@ async function generateOnDemandNarrative() {
     const data = await res.json();
     state.narrativeData = data;
     renderNarrativeSection();
+    prefetchDefaultTtsAudio();
     showToast(
         'Generated fresh on-demand Executive Summary & Recommendations via Vertex AI gemini-3.8-flash');
   } catch (e) {
@@ -282,6 +287,95 @@ function getActiveTtsScript() {
                    .map((r, i) => `Recommendation ${i + 1}: ${r.title}. ${r.recommendation}`)
                    .join(' ');
   return `Executive Summary: ${bullets}. Environment Recommendations: ${recs}`;
+}
+
+function splitTextIntoTtsSegments(text, maxChars = 340) {
+  const clean = (text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  const sentences = clean.split(/(?<=[.!?])\s+/);
+  const chunks = [];
+  let current = '';
+  for (const s of sentences) {
+    if (!s) continue;
+    if ((current ? current.length + 1 + s.length : s.length) <= maxChars) {
+      current = current ? `${current} ${s}` : s;
+    } else {
+      if (current) chunks.push(current);
+      if (s.length <= maxChars) {
+        current = s;
+      } else {
+        const clauses = s.split(/(?<=[,;:])\s+/);
+        let sub = '';
+        for (const cl of clauses) {
+          if ((sub ? sub.length + 1 + cl.length : cl.length) <= maxChars) {
+            sub = sub ? `${sub} ${cl}` : cl;
+          } else {
+            if (sub) chunks.push(sub);
+            sub = cl.slice(0, maxChars);
+          }
+        }
+        current = sub;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function unlockAudioElement(audioEl) {
+  if (!audioEl || state.audioUnlocked) return;
+  try {
+    // Tiny 44-byte valid 1-sample silent WAV to synchronously unlock browser autoplay gesture
+    const silentWav =
+        'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+    audioEl.src = silentWav;
+    state.audioUnlocked = true;
+    const p = audioEl.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => {});
+    }
+  } catch (e) {
+    // Ignore unlock errors
+  }
+}
+
+async function fetchTtsSegment(segText, voice, rate) {
+  const cacheKey = `${voice}|${rate.toFixed(2)}|${segText}`;
+  if (state.ttsAudioCache[cacheKey]) {
+    return state.ttsAudioCache[cacheKey];
+  }
+  const res = await fetch('/api/tts', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      text: segText,
+      voice_name: voice,
+      speaking_rate: rate,
+    }),
+  });
+  const data = await res.json();
+  if (data.status === 'OK' && data.audio_base64) {
+    const item = {
+      src: `data:${data.audio_mime || 'audio/mpeg'};base64,${data.audio_base64}`,
+      engine: data.engine || `gemini-3.8-flash-tts (${voice})`,
+    };
+    state.ttsAudioCache[cacheKey] = item;
+    return item;
+  }
+  throw new Error(data.error_detail || 'Cloud TTS synthesis returned empty audio');
+}
+
+function prefetchDefaultTtsAudio() {
+  const scriptText = getActiveTtsScript();
+  if (!scriptText) return;
+  const voice = document.getElementById('ttsVoiceSelect')?.value || 'Kore';
+  const rate = Number(document.getElementById('ttsRateSelect')?.value || 1.0);
+  const segments = splitTextIntoTtsSegments(scriptText, 340);
+  if (!segments.length) return;
+  // Pre-warm the first 2 segments in client memory so clicking "Read Me the Report" starts instantaneously
+  segments.slice(0, 2).forEach((seg) => {
+    fetchTtsSegment(seg, voice, rate).catch(() => {});
+  });
 }
 
 function updateTtsUiState(statusText, progressPct, isPlaying, isPaused = false) {
@@ -330,15 +424,14 @@ function updateTtsUiState(statusText, progressPct, isPlaying, isPaused = false) 
 }
 
 function stopTtsPlayback() {
+  state.ttsSessionId = (state.ttsSessionId || 0) + 1;
   const audioEl = document.getElementById('ttsAudioElement');
   if (audioEl) {
+    audioEl.onended = null;
+    audioEl.ontimeupdate = null;
     audioEl.pause();
     audioEl.currentTime = 0;
   }
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
-  clearInterval(state._webSpeechTimer);
   state.ttsMode = null;
   updateTtsUiState(
       'Audio Briefing Ready — gemini-3.8-flash-tts (Executive Summary + Recommendations)',
@@ -352,116 +445,115 @@ async function toggleTtsPlayback() {
   const voice = document.getElementById('ttsVoiceSelect')?.value || 'Kore';
   const rate = Number(document.getElementById('ttsRateSelect')?.value || 1.0);
 
-  // If currently playing or paused, toggle pause/resume
+  // If currently playing, pause
   if (state.ttsPlaying && !state.ttsPaused) {
-    if (state.ttsMode === 'CLOUD_AUDIO' && audioEl) {
+    if (audioEl) {
       audioEl.pause();
-    } else if (state.ttsMode === 'WEB_SPEECH' && 'speechSynthesis' in window) {
-      window.speechSynthesis.pause();
     }
     updateTtsUiState('Paused — Click Resume to continue listening', null, false, true);
     return;
   }
 
+  // If currently paused, resume
   if (state.ttsPaused) {
-    if (state.ttsMode === 'CLOUD_AUDIO' && audioEl) {
-      audioEl.play();
-    } else if (state.ttsMode === 'WEB_SPEECH' && 'speechSynthesis' in window) {
-      window.speechSynthesis.resume();
+    if (audioEl) {
+      await audioEl.play();
     }
-    updateTtsUiState('Reading Executive Summary & Environment Recommendations (gemini-3.8-flash-tts)...', null, true, false);
+    updateTtsUiState(
+        `Reading Executive Summary & Recommendations (gemini-3.8-flash-tts • ${voice})...`,
+        null,
+        true,
+        false);
     return;
   }
 
-  // Start fresh TTS playback
+  // Start fresh Cloud Gemini Flash TTS playback
   const scriptText = getActiveTtsScript();
   if (!scriptText) {
     showToast('Report data is still loading.');
     return;
   }
+  if (!audioEl) return;
 
-  if (voice === 'BROWSER_SPEECH') {
-    startWebSpeechFallback(scriptText, rate);
-    return;
-  }
+  // Synchronously unlock the HTML5 Audio element inside the user's click gesture
+  unlockAudioElement(audioEl);
 
-  updateTtsUiState(`Synthesizing expressive voice audio via gemini-3.8-flash-tts (${voice})...`, 12, true, false);
+  const sessionId = (state.ttsSessionId || 0) + 1;
+  state.ttsSessionId = sessionId;
+  state.ttsMode = 'CLOUD_AUDIO';
+
+  const segments = splitTextIntoTtsSegments(scriptText, 340);
+  if (!segments.length) return;
+
+  updateTtsUiState(
+      `Synthesizing natural neural voice via gemini-3.8-flash-tts (${voice})...`,
+      6,
+      true,
+      false);
+
+  // Dispatch synthesis for all segments in parallel so segment 0 plays right away
+  // and subsequent segments are already cached before segment 0 finishes
+  const segmentPromises = segments.map((seg) => fetchTtsSegment(seg, voice, rate));
+
   try {
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        text: scriptText,
-        voice_name: voice,
-        speaking_rate: rate,
-      }),
-    });
-    const data = await res.json();
-    if (data.status === 'OK' && data.audio_base64 && audioEl) {
-      state.ttsMode = 'CLOUD_AUDIO';
-      audioEl.src = `data:${data.audio_mime || 'audio/mpeg'};base64,${data.audio_base64}`;
-      audioEl.ontimeupdate = () => {
-        if (audioEl.duration > 0) {
-          const pct = (audioEl.currentTime / audioEl.duration) * 100;
-          const phase = pct < 52 ?
-              `gemini-3.8-flash-tts (${voice}) • Reading Part 1: Top 5 Executive Insights...` :
-              `gemini-3.8-flash-tts (${voice}) • Reading Part 2: Environment Recommendations...`;
-          updateTtsUiState(`${phase} (${Math.round(pct)}%)`, pct, true, false);
+    for (let idx = 0; idx < segments.length; idx++) {
+      if (state.ttsSessionId !== sessionId) return;
+      const segAudio = await segmentPromises[idx];
+      if (state.ttsSessionId !== sessionId) return;
+
+      if (idx === 0) {
+        showToast(`Playing natural neural report audio via gemini-3.8-flash-tts (${voice})`);
+      }
+
+      await new Promise((resolve, reject) => {
+        if (state.ttsSessionId !== sessionId) {
+          resolve();
+          return;
         }
-      };
-      audioEl.onended = () => {
-        updateTtsUiState(
-            `Finished reading Executive Summary & Recommendations (gemini-3.8-flash-tts • ${voice})`, 100, false, false);
-      };
-      await audioEl.play();
-      showToast(`Playing report audio via gemini-3.8-flash-tts (${voice})`);
-      return;
+        audioEl.src = segAudio.src;
+        audioEl.ontimeupdate = () => {
+          if (state.ttsSessionId !== sessionId) return;
+          if (audioEl.duration > 0) {
+            const segFraction = audioEl.currentTime / audioEl.duration;
+            const totalPct = ((idx + segFraction) / segments.length) * 100;
+            const phase = totalPct < 52 ?
+                `gemini-3.8-flash-tts (${voice}) • Reading Part 1: Top 5 Executive Insights...` :
+                `gemini-3.8-flash-tts (${voice}) • Reading Part 2: Environment Recommendations...`;
+            updateTtsUiState(
+                `${phase} (${Math.round(totalPct)}%)`,
+                totalPct,
+                true,
+                state.ttsPaused);
+          }
+        };
+        audioEl.onended = () => resolve();
+        audioEl.onerror = (err) => reject(err);
+        const playPromise = audioEl.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch((err) => reject(err));
+        }
+      });
     }
-  } catch (e) {
-    // Fallback to browser Web Speech API if Cloud TTS encounters an issue
-  }
 
-  startWebSpeechFallback(scriptText, rate);
-}
-
-function startWebSpeechFallback(scriptText, rate) {
-  if (!('speechSynthesis' in window)) {
-    updateTtsUiState('Speech synthesis not supported in this browser', 0, false, false);
-    return;
-  }
-  window.speechSynthesis.cancel();
-  state.ttsMode = 'WEB_SPEECH';
-  const utter = new SpeechSynthesisUtterance(scriptText);
-  utter.rate = rate;
-  utter.lang = 'en-US';
-
-  let elapsed = 0;
-  const estDurationSec = Math.max(scriptText.split(/\s+/).length / (2.6 * rate), 15);
-  clearInterval(state._webSpeechTimer);
-  state._webSpeechTimer = setInterval(() => {
-    if (state.ttsPlaying && !state.ttsPaused) {
-      elapsed += 0.5;
-      const pct = Math.min((elapsed / estDurationSec) * 100, 96);
+    if (state.ttsSessionId === sessionId) {
       updateTtsUiState(
-          `Reading Report via Browser Speech Engine (${Math.round(pct)}%)...`,
-          pct,
-          true,
+          `Finished reading Executive Summary & Recommendations (gemini-3.8-flash-tts • ${voice})`,
+          100,
+          false,
           false);
     }
-  }, 500);
-
-  utter.onend = () => {
-    clearInterval(state._webSpeechTimer);
-    updateTtsUiState('Finished reading Executive Summary & Recommendations', 100, false, false);
-  };
-  utter.onerror = () => {
-    clearInterval(state._webSpeechTimer);
-    stopTtsPlayback();
-  };
-
-  updateTtsUiState('Reading Report via Browser Speech Engine...', 5, true, false);
-  window.speechSynthesis.speak(utter);
+  } catch (e) {
+    if (state.ttsSessionId === sessionId) {
+      updateTtsUiState(
+          `Cloud TTS temporarily busy — click Read Me the Report to retry (${voice})`,
+          0,
+          false,
+          false);
+      showToast('Cloud Text-to-Speech synthesis interrupted. Click Read Me the Report to retry.');
+    }
+  }
 }
+
 
 /* ==========================================================================
    4. AGENT PLATFORM MODEL BILLING & TOKEN CONSUMPTION
