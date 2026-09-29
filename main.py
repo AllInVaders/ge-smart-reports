@@ -27,10 +27,10 @@ if HAS_FASTAPI:
   app = FastAPI(
       title="Gemini Enterprise Smart Reports",
       description=(
-          "Open-source, 100% live Discovery Engine API & Formula-Driven Usage,"
-          " Data Store, Agent & Lineage Reporting Dashboard."
+          "Open-source, 100% live Discovery Engine API, Cloud Monitoring Token Billing,"
+          " Natural Language Executive Summary, TTS & Lineage Reporting Dashboard."
       ),
-      version="3.0.0",
+      version="3.1.0",
   )
   app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -43,7 +43,7 @@ if HAS_FASTAPI:
     return JSONResponse({
         "status": "ok",
         "project_id": engine.project_id,
-        "version": "3.0.0",
+        "version": "3.1.0",
     })
 
   @app.get("/api/report")
@@ -61,6 +61,37 @@ if HAS_FASTAPI:
       engine_id: str = Query(default="ALL"),
   ) -> JSONResponse:
     data = engine.get_lineage_graph(engine_filter=engine_id)
+    return JSONResponse(data)
+
+  @app.get("/api/narrative")
+  async def api_narrative_get(
+      engine_id: str = Query(default="ALL"),
+      use_llm: bool = Query(default=True),
+  ) -> JSONResponse:
+    data = engine.generate_natural_language_report(
+        engine_filter=engine_id, use_llm=use_llm
+    )
+    return JSONResponse(data)
+
+  @app.post("/api/narrative")
+  async def api_narrative_post(req: Request) -> JSONResponse:
+    payload: dict[str, Any] = await req.json()
+    eid = str(payload.get("engine_id") or "ALL")
+    use_llm = bool(payload.get("use_llm", True))
+    data = engine.generate_natural_language_report(
+        engine_filter=eid, use_llm=use_llm
+    )
+    return JSONResponse(data)
+
+  @app.post("/api/tts")
+  async def api_tts(req: Request) -> JSONResponse:
+    payload: dict[str, Any] = await req.json()
+    text = str(payload.get("text") or "")
+    voice = str(payload.get("voice_name") or "en-US-Neural2-F")
+    rate = float(payload.get("speaking_rate") or 1.05)
+    data = engine.synthesize_report_speech(
+        text=text, voice_name=voice, speaking_rate=rate
+    )
     return JSONResponse(data)
 
   @app.get("/api/config")
@@ -92,7 +123,7 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
 
     if path == "/api/health":
       self._send_json(
-          {"status": "ok", "project_id": engine.project_id, "version": "3.0.0"}
+          {"status": "ok", "project_id": engine.project_id, "version": "3.1.0"}
       )
       return
     if path == "/api/report":
@@ -107,6 +138,15 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
     if path == "/api/lineage":
       eid = (qs.get("engine_id") or ["ALL"])[0]
       self._send_json(engine.get_lineage_graph(engine_filter=eid))
+      return
+    if path == "/api/narrative":
+      eid = (qs.get("engine_id") or ["ALL"])[0]
+      use_llm = (qs.get("use_llm") or ["true"])[0].lower() == "true"
+      self._send_json(
+          engine.generate_natural_language_report(
+              engine_filter=eid, use_llm=use_llm
+          )
+      )
       return
     if path == "/api/config":
       self._send_json(engine.get_config())
@@ -135,12 +175,32 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
 
   def do_POST(self) -> None:
     parsed = urllib.parse.urlparse(self.path)
+    length = int(self.headers.get("Content-Length", "0"))
+    raw = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
+    payload = json.loads(raw) if raw else {}
+
     if parsed.path == "/api/config":
-      length = int(self.headers.get("Content-Length", "0"))
-      raw = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
-      payload = json.loads(raw)
       updated = engine.update_config(payload)
       self._send_json({"status": "UPDATED", "config": updated})
+      return
+    if parsed.path == "/api/narrative":
+      eid = str(payload.get("engine_id") or "ALL")
+      use_llm = bool(payload.get("use_llm", True))
+      self._send_json(
+          engine.generate_natural_language_report(
+              engine_filter=eid, use_llm=use_llm
+          )
+      )
+      return
+    if parsed.path == "/api/tts":
+      text = str(payload.get("text") or "")
+      voice = str(payload.get("voice_name") or "en-US-Neural2-F")
+      rate = float(payload.get("speaking_rate") or 1.05)
+      self._send_json(
+          engine.synthesize_report_speech(
+              text=text, voice_name=voice, speaking_rate=rate
+          )
+      )
       return
     self.send_error(404, "Not Found")
 

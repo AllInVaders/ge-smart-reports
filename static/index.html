@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gemini Enterprise Smart Reports — Live Discovery Engine Analytics</title>
+  <title>Gemini Enterprise Smart Reports — Live Discovery Engine, Token Billing &amp; Lineage Analytics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -18,7 +18,7 @@
           <span class="google-spark-icon">✦</span>
           <div>
             <h2>Smart Reports Configuration</h2>
-            <p class="muted">Live Discovery Engine API &amp; Expense Formula</p>
+            <p class="muted">Live Discovery Engine API, Token Billing &amp; Expense Formula</p>
           </div>
         </div>
         <button id="closeConfigDrawerBtn" class="icon-btn" aria-label="Close menu">&times;</button>
@@ -30,10 +30,12 @@
           <div class="drawer-section-title">Quick Navigation</div>
           <nav class="drawer-nav">
             <a href="#section-kpis" class="drawer-nav-link">📊 Overview &amp; KPIs</a>
+            <a href="#section-narrative" class="drawer-nav-link">✨ AI Summary &amp; TTS</a>
+            <a href="#section-model-billing" class="drawer-nav-link">🪙 Token Billing (Model/Agent)</a>
             <a href="#section-charts" class="drawer-nav-link">📈 Workstreams &amp; Deliverables</a>
+            <a href="#section-lineage-graph" class="drawer-nav-link">🕸️ 122-Agent Lineage Graph</a>
             <a href="#section-datastores" class="drawer-nav-link">🗄️ Connected Data Stores</a>
-            <a href="#section-agents" class="drawer-nav-link">🤖 Registered Agents (100+)</a>
-            <a href="#section-lineage-graph" class="drawer-nav-link">🕸️ ReactFlow Lineage Graph</a>
+            <a href="#section-agents" class="drawer-nav-link">🤖 Registered Agents (122)</a>
             <a href="#section-frictions" class="drawer-nav-link">⚠️ Live API Frictions &amp; Users</a>
           </nav>
         </div>
@@ -42,21 +44,25 @@
         <div class="drawer-section expense-formula-section">
           <div class="drawer-section-title">ƒx Understand Expense (Formula Engine)</div>
           <p class="formula-explainer">
-            Discovery Engine APIs return live resource inventories (agents, data stores, connectors, licenses) and activity logs rather than billing invoices. All <strong>$ Expense</strong> and <strong>$ Value Saved</strong> metrics are calculated deterministically from live API counts using the formula below:
+            Combines <strong>100% live Cloud Monitoring token telemetry</strong> (<code>aiplatform.googleapis.com/publisher/online_serving/token_count</code>) and <strong>live Discovery Engine resource inventories</strong> (agents, data stores, connectors, licenses) with transparent, customizable pricing coefficients:
           </p>
 
           <div class="formula-box">
             <div class="formula-line">
-              <strong>1. Variable Session &amp; Token Spend:</strong>
-              <code>Sessions × Turns × ((InTokens × InPrice + OutTokens × OutPrice)/1M + InvocationFee) × ArchIntensity</code>
+              <strong>1. Live Model Token Spend (Cloud Monitoring):</strong>
+              <code>&Sigma; [ (ModelInputTokens / 1M) &times; ModelInRate + (ModelOutputTokens / 1M) &times; ModelOutRate ]</code>
             </div>
             <div class="formula-line">
-              <strong>2. Infrastructure &amp; Seat Spend:</strong>
-              <code>(ActiveConnectors × ConnectorMonthlyCost) + (AssignedLicenses × LicenseMonthlyCost)</code>
+              <strong>2. Variable Session &amp; Turn Spend:</strong>
+              <code>Sessions &times; Turns &times; ((InTokens &times; InPrice + OutTokens &times; OutPrice)/1M + InvocationFee) &times; ArchIntensity</code>
             </div>
             <div class="formula-line">
-              <strong>3. Productivity Value Saved:</strong>
-              <code>(Sessions × AvgMinutesSaved / 60) × HourlyRate</code>
+              <strong>3. Infrastructure &amp; Seat Spend:</strong>
+              <code>(ActiveConnectors &times; ConnectorMonthlyCost) + (AssignedLicenses &times; LicenseMonthlyCost)</code>
+            </div>
+            <div class="formula-line">
+              <strong>4. Productivity Value Saved:</strong>
+              <code>(Sessions &times; AvgMinutesSaved / 60) &times; HourlyRate</code>
             </div>
             <div id="drawerLiveEquation" class="formula-live-preview">
               Loading live equation...
@@ -65,11 +71,11 @@
 
           <div class="cfg-grid-2">
             <label class="cfg-field">
-              <span>Input Token Price ($ / 1M)</span>
+              <span>Ref Input Token Price ($ / 1M)</span>
               <input id="cfgInputPrice" type="number" step="0.05" min="0" value="1.25" />
             </label>
             <label class="cfg-field">
-              <span>Output Token Price ($ / 1M)</span>
+              <span>Ref Output Token Price ($ / 1M)</span>
               <input id="cfgOutputPrice" type="number" step="0.10" min="0" value="5.00" />
             </label>
             <label class="cfg-field">
@@ -120,7 +126,7 @@
           <div class="drawer-section-title">GCP Project &amp; Cache Settings</div>
           <label class="cfg-field">
             <span>GCP Project ID</span>
-            <input id="cfgProjectId" type="text" placeholder="e.g. my-gcp-project-id" />
+            <input id="cfgProjectId" type="text" placeholder="e.g. genai-demos-avr-2024" />
           </label>
           <label class="cfg-field">
             <span>API Snapshot Cache TTL (seconds)</span>
@@ -148,7 +154,7 @@
             <h1>Gemini Enterprise Smart Reports</h1>
             <span id="projectBadge" class="project-pill">Loading project...</span>
           </div>
-          <p id="headerMetaSub" class="header-sub">Live Discovery Engine v1alpha, Vertex AI Reasoning Engine &amp; Data Connector Analytics</p>
+          <p id="headerMetaSub" class="header-sub">Live Discovery Engine v1alpha, Cloud Monitoring Token Billing, AI Recommendations &amp; Full Lineage</p>
         </div>
       </div>
 
@@ -159,6 +165,7 @@
             <option value="ALL">All Engines (Loading...)</option>
           </select>
         </div>
+        <button id="headerTtsBtn" class="btn btn-tts" title="Listen to the Executive Summary &amp; Recommendations">🔊 Read Me the Report</button>
         <button id="openExpenseFormulaBtn" class="btn btn-secondary">ƒx Understand Expense</button>
         <button id="refreshLiveBtn" class="btn btn-primary">↻ Refresh Live API</button>
       </div>
@@ -179,14 +186,14 @@
         <div class="kpi-meta" id="kpiDatastoresBreakdown">Loading collections &amp; connectors...</div>
       </div>
       <div class="kpi-card">
+        <div class="kpi-label">Agent Platform Token Volume (30d)</div>
+        <div class="kpi-value" id="kpiLiveTokens">--</div>
+        <div class="kpi-meta" id="kpiLiveTokensMeta">Loading Cloud Monitoring token_count...</div>
+      </div>
+      <div class="kpi-card">
         <div class="kpi-label">Vertex Reasoning &amp; Cloud Run</div>
         <div class="kpi-value" id="kpiRuntimeCount">--</div>
         <div class="kpi-meta" id="kpiRuntimeMeta">Loading Vertex AI &amp; Cloud Run...</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">User Licenses (userStores)</div>
-        <div class="kpi-value" id="kpiLicensesCount">--</div>
-        <div class="kpi-meta" id="kpiLicensesMeta">Loading userLicenses...</div>
       </div>
       <div class="kpi-card kpi-card-highlight" id="kpiExpenseCard" title="Click to open Expense Formula">
         <div class="kpi-label">Formula-Inferred Spend &amp; Value</div>
@@ -199,12 +206,291 @@
     <section class="formula-strip">
       <div class="formula-strip-left">
         <span class="formula-badge">ƒx LIVE EXPENSE FORMULA</span>
-        <span id="liveEquationBannerText" class="formula-strip-text">Calculating from live Discovery Engine API counts...</span>
+        <span id="liveEquationBannerText" class="formula-strip-text">Calculating from live Discovery Engine &amp; Cloud Monitoring API counts...</span>
       </div>
       <button id="customizeFormulaStripBtn" class="link-btn">Customize Formula &rarr;</button>
     </section>
 
-    <!-- 2. Google-Palette Workstreams & Deliverables Paired Bar Charts -->
+    <!-- 2. Natural Language Executive Summary (5 Bullets On-Demand) + Environment Recommendations + TTS "Read Me the Report" -->
+    <section id="section-narrative" class="card narrative-card">
+      <div class="card-header narrative-header">
+        <div>
+          <div class="narrative-title-row">
+            <h2>Executive Summary &amp; Environment Recommendations (Natural Language)</h2>
+            <span id="narrativeSourceBadge" class="status-pill status-active">Live Telemetry Grounded</span>
+          </div>
+          <p class="card-sub">
+            On-demand natural language synthesis of your top 5 executive insights and actionable architecture, connector &amp; token optimization recommendations
+          </p>
+        </div>
+        <div class="narrative-actions">
+          <button id="generateNarrativeBtn" class="btn btn-primary">
+            ✨ Generate On-Demand Report (Gemini 2.5 Flash)
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive TTS Audio Bar ("Read Me the Report") -->
+      <div class="tts-player-bar" id="ttsPlayerBar">
+        <div class="tts-left">
+          <button id="ttsPlayToggleBtn" class="btn btn-tts-play">
+            <span id="ttsPlayIcon">🔊</span>
+            <span id="ttsPlayLabel">Read Me the Report</span>
+          </button>
+          <button id="ttsStopBtn" class="btn btn-secondary btn-sm" disabled>⏹ Stop</button>
+          <div class="tts-status-box">
+            <div class="tts-status-title" id="ttsStatusTitle">Audio Briefing Ready (Executive Summary + Environment Recommendations)</div>
+            <div class="tts-progress-track">
+              <div class="tts-progress-fill" id="ttsProgressFill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="tts-right">
+          <label class="tts-ctrl-label">
+            Voice
+            <select id="ttsVoiceSelect" class="compact-select">
+              <option value="en-US-Neural2-F">Cloud TTS • Neural2 Female (EN)</option>
+              <option value="en-US-Neural2-D">Cloud TTS • Neural2 Male (EN)</option>
+              <option value="en-US-Journey-D">Cloud TTS • Journey Executive (EN)</option>
+              <option value="BROWSER_SPEECH">Browser Web Speech API</option>
+            </select>
+          </label>
+          <label class="tts-ctrl-label">
+            Speed
+            <select id="ttsRateSelect" class="compact-select">
+              <option value="1.0">1.0x</option>
+              <option value="1.08" selected>1.1x</option>
+              <option value="1.2">1.2x</option>
+            </select>
+          </label>
+        </div>
+        <audio id="ttsAudioElement" class="hidden"></audio>
+      </div>
+
+      <!-- 2-Column Executive Summary (5 Bullets) & Environment Recommendations -->
+      <div class="narrative-grid-2">
+        <!-- Column A: Executive Summary (5 Most Important Bullets) -->
+        <div class="narrative-col">
+          <div class="narrative-col-header">
+            <span class="narrative-step-pill">A</span>
+            <div>
+              <h3>Executive Summary — 5 Most Important Insights</h3>
+              <p class="muted">Generated from live Discovery Engine, Vertex AI &amp; Cloud Monitoring metrics</p>
+            </div>
+          </div>
+          <div id="executiveBulletsList" class="exec-bullets-list"></div>
+        </div>
+
+        <!-- Column B: Recommendations for Your Environment -->
+        <div class="narrative-col">
+          <div class="narrative-col-header">
+            <span class="narrative-step-pill pill-teal">B</span>
+            <div>
+              <h3>Recommendations for Your Environment</h3>
+              <p class="muted">Prioritized engineering &amp; FinOps actions tailored to <code id="recProjectCode">genai-demos-avr-2024</code></p>
+            </div>
+          </div>
+          <div id="environmentRecsList" class="env-recs-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Agent Platform Model Billing & Token Consumption (Per Model, Per Agent, Per Project/Engine) -->
+    <section id="section-model-billing" class="card">
+      <div class="card-header">
+        <div>
+          <div class="narrative-title-row">
+            <h2>Agent Platform Model Billing &amp; Token Consumption</h2>
+            <span id="billingAccountBadge" class="project-pill">Billing Account: Loading...</span>
+            <span id="billingStatusBadge" class="status-pill status-active">Billing Enabled</span>
+          </div>
+          <p class="card-sub">
+            Live 30-day token telemetry from <code>aiplatform.googleapis.com/publisher/online_serving/token_count</code> &amp; <code>model_invocation_count</code> attributed per Model, per Agent &amp; per Project/Engine
+          </p>
+        </div>
+        <div class="table-toolbar">
+          <div class="segmented-tabs" id="tokenBillingTabs">
+            <button class="seg-btn active" data-billing-tab="MODEL">Per Model (<span id="tbCountModels">0</span>)</button>
+            <button class="seg-btn" data-billing-tab="AGENT">Per Agent (<span id="tbCountAgents">0</span>)</button>
+            <button class="seg-btn" data-billing-tab="PROJECT">Per Project &amp; App (<span id="tbCountEngines">0</span>)</button>
+          </div>
+          <input id="tokenBillingSearch" type="search" class="search-input" placeholder="Search model, agent, or engine..." />
+        </div>
+      </div>
+
+      <!-- Summary KPI Strip for Model Token Billing -->
+      <div class="token-summary-strip">
+        <div class="token-stat-pill">
+          <span class="token-stat-label">Total Live Tokens (30d)</span>
+          <strong id="tbTotalTokens">--</strong>
+        </div>
+        <div class="token-stat-pill">
+          <span class="token-stat-label">Input Tokens (Prompt/Context)</span>
+          <strong id="tbInputTokens" class="text-blue">--</strong>
+        </div>
+        <div class="token-stat-pill">
+          <span class="token-stat-label">Output Tokens (Completion)</span>
+          <strong id="tbOutputTokens" class="text-teal">--</strong>
+        </div>
+        <div class="token-stat-pill">
+          <span class="token-stat-label">Live Model Invocations</span>
+          <strong id="tbInvocations">--</strong>
+        </div>
+        <div class="token-stat-pill">
+          <span class="token-stat-label">Live Model Token Spend</span>
+          <strong id="tbModelSpend" class="text-green">--</strong>
+        </div>
+      </div>
+
+      <!-- Visual Token Distribution Bar Chart across Top Models -->
+      <div class="model-bars-section">
+        <div class="model-bars-header">
+          <span class="drawer-section-title" style="margin-bottom: 0;">LIVE TOKEN DISTRIBUTION BY GEMINI MODEL (INPUT VS. OUTPUT TOKENS)</span>
+          <div class="legend-inline">
+            <span class="legend-item"><i class="swatch swatch-blue"></i>Input Tokens</span>
+            <span class="legend-item"><i class="swatch swatch-teal"></i>Output Tokens</span>
+          </div>
+        </div>
+        <div id="modelTokenBarsBox" class="paired-bars-list"></div>
+      </div>
+
+      <!-- Tab 1: Per Model Table -->
+      <div id="billingPanelModel" class="table-scroll">
+        <table class="gcp-table">
+          <thead>
+            <tr>
+              <th>Model ID (PublisherModel)</th>
+              <th>Model Tier</th>
+              <th>Location</th>
+              <th>Invocations (30d)</th>
+              <th>Input Tokens</th>
+              <th>Output Tokens</th>
+              <th>Total Tokens &darr;</th>
+              <th>% Share</th>
+              <th>Linked GE Agents</th>
+              <th>Rate ($/1M In / Out)</th>
+              <th>Token Spend ($)</th>
+            </tr>
+          </thead>
+          <tbody id="billingModelTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Tab 2: Per Agent Table -->
+      <div id="billingPanelAgent" class="table-scroll table-scroll-tall hidden">
+        <table class="gcp-table">
+          <thead>
+            <tr>
+              <th>Agent Display Name</th>
+              <th>App / Engine</th>
+              <th>Architecture</th>
+              <th>Underlying Model</th>
+              <th>State</th>
+              <th>Sessions (30d)</th>
+              <th>Input Tokens</th>
+              <th>Output Tokens</th>
+              <th>Total Tokens &darr;</th>
+              <th>Token Spend ($)</th>
+              <th>Total Agent Spend ($)</th>
+            </tr>
+          </thead>
+          <tbody id="billingAgentTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Tab 3: Per Project & Engine Table -->
+      <div id="billingPanelProject" class="table-scroll hidden">
+        <table class="gcp-table">
+          <thead>
+            <tr>
+              <th>GCP Project ID</th>
+              <th>Gemini Enterprise App / Engine</th>
+              <th>Registered Agents</th>
+              <th>Primary Models Used</th>
+              <th>Sessions (30d)</th>
+              <th>Input Tokens</th>
+              <th>Output Tokens</th>
+              <th>Total Tokens &darr;</th>
+              <th>% Token Share</th>
+              <th>Token Spend ($)</th>
+              <th>Total App Spend ($)</th>
+            </tr>
+          </thead>
+          <tbody id="billingProjectTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. Interactive ReactFlow Data & Agent Lineage Graph — All 122 Agents -->
+    <section id="section-lineage-graph" class="card">
+      <div class="card-header">
+        <div>
+          <div class="narrative-title-row">
+            <h2>Interactive Data Store, Agent &amp; Reasoning Engine Lineage Graph</h2>
+            <span id="lineageTotalCountBadge" class="status-pill status-active">All 122 Agents Loaded</span>
+          </div>
+          <p class="card-sub">
+            Complete 4-tier topology linking all Connected Data Stores &rarr; Gemini Enterprise Apps &rarr; All 122 Registered Agents &rarr; 43 Vertex AI Reasoning Engines
+          </p>
+        </div>
+        <div class="lineage-controls">
+          <select id="lineageLayoutSelect" class="compact-select" aria-label="Lineage layout mode">
+            <option value="MATRIX" selected>View: All 122 Agents (Multi-Column Matrix)</option>
+            <option value="PAGINATED">View: Paginated Stream (20 Agents / Page)</option>
+            <option value="ADK_ONLY">View: ADK &amp; Error Agents Focus</option>
+          </select>
+          <select id="lineageSubtypeSelect" class="compact-select" aria-label="Filter lineage by agent subtype">
+            <option value="ALL">All Agent Types (122)</option>
+            <option value="Low-Code">Low-Code Agents</option>
+            <option value="ADK">ADK (Reasoning Engine)</option>
+            <option value="Managed">Google-Made / Core</option>
+            <option value="Skill">Skill Agents</option>
+            <option value="Workflow">Workflow Agents</option>
+            <option value="A2A">A2A Agents</option>
+          </select>
+          <input id="lineageSearchInput" type="search" class="search-input lineage-search" placeholder="Search 122 agents or stores..." />
+          <div id="lineagePagerBox" class="lineage-pager hidden">
+            <button id="lineagePrevPageBtn" class="btn btn-secondary btn-sm">&larr; Prev</button>
+            <span id="lineagePageLabel" class="lineage-page-label">1 / 7</span>
+            <button id="lineageNextPageBtn" class="btn btn-secondary btn-sm">Next &rarr;</button>
+          </div>
+          <button id="lineageZoomInBtn" class="btn btn-secondary btn-sm" title="Zoom In">+</button>
+          <button id="lineageZoomOutBtn" class="btn btn-secondary btn-sm" title="Zoom Out">&minus;</button>
+          <button id="lineageFitViewBtn" class="btn btn-secondary btn-sm" title="Fit Readable Width">Fit Width</button>
+          <button id="lineageFitAllBtn" class="btn btn-secondary btn-sm" title="Bird's-Eye Fit All Nodes">Fit All</button>
+          <button id="lineageToggleAnimBtn" class="btn btn-secondary btn-sm">⚡ Live Flow: ON</button>
+        </div>
+      </div>
+
+      <div class="lineage-tier-bar">
+        <div class="tier-pill"><span class="tier-dot dot-tier-2"></span>1. Connected Data Stores &amp; MCP (<span id="tierCountDs">29</span>)</div>
+        <div class="tier-pill"><span class="tier-dot dot-tier-1"></span>2. Gemini Enterprise Apps (<span id="tierCountEng">19</span>)</div>
+        <div class="tier-pill"><span class="tier-dot dot-tier-3"></span>3. Registered Agents (<span id="tierCountAg">122</span>)</div>
+        <div class="tier-pill"><span class="tier-dot dot-tier-4"></span>4. Vertex AI Reasoning Engines (<span id="tierCountRe">43</span>)</div>
+      </div>
+
+      <div class="lineage-workspace">
+        <div id="reactflowLineageContainer" class="lineage-canvas-wrap"></div>
+        <aside class="lineage-inspector">
+          <div class="inspector-eyebrow">NODE INSPECTOR</div>
+          <h3 id="inspTitle">Select a Node</h3>
+          <div id="inspSubtitle" class="inspector-sub">Click any node in the graph</div>
+          <div class="inspector-badge-row">
+            <span id="inspBadge" class="status-pill status-active">HEALTHY</span>
+          </div>
+          <div class="inspector-kv">
+            <div><span class="kv-label">Resource Type &amp; Model</span><strong id="inspCategory">-</strong></div>
+            <div><span class="kv-label">Live Telemetry</span><strong id="inspMetrics">-</strong></div>
+            <div><span class="kv-label">Resource Path</span><code id="inspResource">-</code></div>
+          </div>
+          <p id="inspDetails" class="inspector-desc"></p>
+          <div class="inspector-edges-title">Connected Lineage Edges (<span id="inspEdgeCount">0</span>)</div>
+          <div id="inspEdgesList" class="inspector-edges-list"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- 5. Google-Palette Workstreams & Deliverables Paired Bar Charts -->
     <section id="section-charts" class="charts-grid-2">
       <!-- Workstreams Card -->
       <div class="card">
@@ -249,7 +535,7 @@
       </div>
     </section>
 
-    <!-- 3. Connected Data Stores Table (Matching GCP Console "Connected data stores") -->
+    <!-- 6. Connected Data Stores Table -->
     <section id="section-datastores" class="card">
       <div class="card-header">
         <div>
@@ -285,12 +571,12 @@
       </div>
     </section>
 
-    <!-- 4. Registered Agents Table (Matching GCP Console "Agents table" — All 100+ Agents) -->
+    <!-- 7. Registered Agents Table (All 122 Agents with Model & Token Columns) -->
     <section id="section-agents" class="card">
       <div class="card-header">
         <div>
           <h2>Registered Agents Inventory</h2>
-          <p class="card-sub">Full paginated inventory from <code>engines/{engine}/assistants/default_assistant/agents</code></p>
+          <p class="card-sub">Full paginated inventory from <code>engines/{engine}/assistants/default_assistant/agents</code> with model &amp; token attribution</p>
         </div>
         <div class="table-toolbar">
           <div class="segmented-tabs" id="agentOwnerTabs">
@@ -305,7 +591,7 @@
             <option value="DISABLED">Disabled</option>
             <option value="ERRORS">Validation Errors</option>
           </select>
-          <input id="agentSearchInput" type="search" class="search-input" placeholder="Filter by display name, ID, or type..." />
+          <input id="agentSearchInput" type="search" class="search-input" placeholder="Filter by display name, model, ID, or type..." />
         </div>
       </div>
 
@@ -316,9 +602,10 @@
               <th>Display name</th>
               <th>Agent ID</th>
               <th>Agent type</th>
+              <th>Model</th>
               <th>Agent state</th>
               <th>App / Engine</th>
-              <th>Created at</th>
+              <th>Tokens (30d)</th>
               <th>Last updated &darr;</th>
               <th>Est. Spend</th>
             </tr>
@@ -328,50 +615,7 @@
       </div>
     </section>
 
-    <!-- 5. Interactive ReactFlow Data & Agent Lineage Graph -->
-    <section id="section-lineage-graph" class="card">
-      <div class="card-header">
-        <div>
-          <h2>Interactive Data Store, Agent &amp; Reasoning Engine Lineage Graph</h2>
-          <p class="card-sub">Live topology linking Gemini Enterprise Apps &rarr; Connected Data Stores &rarr; Registered Agents &rarr; Vertex AI Reasoning Engines</p>
-        </div>
-        <div class="lineage-controls">
-          <button id="lineageZoomInBtn" class="btn btn-secondary btn-sm" title="Zoom In">+</button>
-          <button id="lineageZoomOutBtn" class="btn btn-secondary btn-sm" title="Zoom Out">&minus;</button>
-          <button id="lineageFitViewBtn" class="btn btn-secondary btn-sm">Fit View</button>
-          <button id="lineageToggleAnimBtn" class="btn btn-secondary btn-sm">⚡ Live Flow: ON</button>
-        </div>
-      </div>
-
-      <div class="lineage-tier-bar">
-        <div class="tier-pill"><span class="tier-dot dot-tier-2"></span>1. Connected Data Stores &amp; MCP</div>
-        <div class="tier-pill"><span class="tier-dot dot-tier-1"></span>2. Gemini Enterprise Apps</div>
-        <div class="tier-pill"><span class="tier-dot dot-tier-3"></span>3. Registered Agents</div>
-        <div class="tier-pill"><span class="tier-dot dot-tier-4"></span>4. Vertex AI Reasoning Engines</div>
-      </div>
-
-      <div class="lineage-workspace">
-        <div id="reactflowLineageContainer" class="lineage-canvas-wrap"></div>
-        <aside class="lineage-inspector">
-          <div class="inspector-eyebrow">NODE INSPECTOR</div>
-          <h3 id="inspTitle">Select a Node</h3>
-          <div id="inspSubtitle" class="inspector-sub">Click any node in the graph</div>
-          <div class="inspector-badge-row">
-            <span id="inspBadge" class="status-pill status-active">HEALTHY</span>
-          </div>
-          <div class="inspector-kv">
-            <div><span class="kv-label">Resource Type</span><strong id="inspCategory">-</strong></div>
-            <div><span class="kv-label">Live Telemetry</span><strong id="inspMetrics">-</strong></div>
-            <div><span class="kv-label">Resource Path</span><code id="inspResource">-</code></div>
-          </div>
-          <p id="inspDetails" class="inspector-desc"></p>
-          <div class="inspector-edges-title">Connected Lineage Edges</div>
-          <div id="inspEdgesList" class="inspector-edges-list"></div>
-        </aside>
-      </div>
-    </section>
-
-    <!-- 6. Live API Frictions & Licensed Principals (2-Column Compact Footer) -->
+    <!-- 8. Live API Frictions & Licensed Principals -->
     <section id="section-frictions" class="charts-grid-2">
       <!-- Live API Frictions -->
       <div class="card">

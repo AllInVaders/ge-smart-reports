@@ -7,14 +7,25 @@ const state = {
   agentOwnerFilter: 'ALL',
   agentStateFilter: 'ALL',
   agentSearch: '',
+  billingTab: 'MODEL',
+  billingSearch: '',
   revealPii: false,
   reportData: null,
+  narrativeData: null,
   lineageData: null,
+  lineageLayoutMode: 'MATRIX',
+  lineageSubtypeFilter: 'ALL',
+  lineageSearch: '',
+  lineagePage: 1,
+  lineagePageSize: 20,
   lineageSelectedNodeId: null,
   lineageAnimated: true,
-  lineageZoom: 0.72,
-  lineagePanX: 14,
-  lineagePanY: 18,
+  lineageZoom: 0.56,
+  lineagePanX: 10,
+  lineagePanY: 10,
+  ttsPlaying: false,
+  ttsPaused: false,
+  ttsMode: null,
 };
 
 function fmtNum(n) {
@@ -28,6 +39,13 @@ function fmtUsd(n) {
   });
 }
 
+function fmtCompactTokens(n) {
+  const v = Number(n || 0);
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return String(v);
+}
+
 function showToast(msg) {
   const el = document.getElementById('toastBanner');
   if (!el) return;
@@ -36,7 +54,7 @@ function showToast(msg) {
   clearTimeout(el._timer);
   el._timer = setTimeout(() => {
     el.classList.add('hidden');
-  }, 3200);
+  }, 3400);
 }
 
 function iconForDatastore(cat) {
@@ -57,7 +75,7 @@ function iconForDatastore(cat) {
 }
 
 /* ==========================================================================
-   1. FETCH LIVE REPORT & FORMULA TELEMETRY
+   1. FETCH LIVE REPORT, TOKEN BILLING & FORMULA TELEMETRY
    ========================================================================== */
 async function loadReport(forceRefresh = false) {
   const btn = document.getElementById('refreshLiveBtn');
@@ -69,9 +87,14 @@ async function loadReport(forceRefresh = false) {
     const res = await fetch(url);
     const data = await res.json();
     state.reportData = data;
+    if (!state.narrativeData || forceRefresh) {
+      state.narrativeData = data.narrative_report || null;
+    }
 
     populateEngineSelector(data.engines || [], data.selected_engine_id);
     renderKpisAndFormulaBanner(data);
+    renderNarrativeSection();
+    renderModelBillingSection();
     renderWorkstreamsChart();
     renderDeliverablesChart();
     renderDatastoresTable();
@@ -102,13 +125,14 @@ function populateEngineSelector(engines, selectedId) {
 function renderKpisAndFormulaBanner(data) {
   const k = data.kpis || {};
   const fb = data.formula_breakdown || {};
+  const mb = (data.model_billing || {}).billing_info || {};
 
   document.getElementById('projectBadge').textContent =
       `Project: ${data.project_id}`;
   document.getElementById('headerMetaSub').textContent =
-      `Live Discovery Engine API (${data.fetch_latency_ms} ms) • ${
+      `Live Discovery Engine & Cloud Monitoring (${data.fetch_latency_ms} ms) • ${
           k.total_engines} Apps • ${k.total_agents} Agents • ${
-          k.total_datastores} Data Stores`;
+          fmtCompactTokens(k.live_tokens_30d)} Live Tokens`;
 
   document.getElementById('kpiTotalAgents').textContent =
       `${fmtNum(k.total_agents)} Agents`;
@@ -122,17 +146,18 @@ function renderKpisAndFormulaBanner(data) {
       `${k.active_connectors} Active Connectors • ${
           k.failed_connectors} Init Error`;
 
+  document.getElementById('kpiLiveTokens').textContent =
+      `${fmtCompactTokens(k.live_tokens_30d)} Tokens`;
+  document.getElementById('kpiLiveTokensMeta').textContent =
+      `${fmtCompactTokens(k.live_input_tokens_30d)} In • ${
+          fmtCompactTokens(k.live_output_tokens_30d)} Out • ${
+          mb.active_models_count || 14} Models`;
+
   document.getElementById('kpiRuntimeCount').textContent =
       `${k.vertex_reasoning_engines} RE / ${k.cloud_run_services} Run`;
   document.getElementById('kpiRuntimeMeta').textContent =
       `${k.vertex_reasoning_engines} Vertex Reasoning Engines • ${
           k.cloud_run_services} Cloud Run Services`;
-
-  document.getElementById('kpiLicensesCount').textContent =
-      `${k.assigned_licenses} / ${k.total_licenses} Seats`;
-  document.getElementById('kpiLicensesMeta').textContent =
-      `${k.active_users_30d} Active (30d) • ${
-          k.total_licenses - k.assigned_licenses} Unlicensed Attempt`;
 
   document.getElementById('kpiTotalSpend').textContent =
       `$${fmtUsd(k.total_spend_usd)}`;
@@ -147,7 +172,488 @@ function renderKpisAndFormulaBanner(data) {
 }
 
 /* ==========================================================================
-   2. GOOGLE-PALETTE WORKSTREAMS & DELIVERABLES PAIRED BARS
+   2. NATURAL LANGUAGE EXECUTIVE SUMMARY (5 BULLETS) & RECOMMENDATIONS + TTS
+   ========================================================================== */
+function renderNarrativeSection() {
+  const nav = state.narrativeData ||
+      (state.reportData && state.reportData.narrative_report);
+  if (!nav) return;
+
+  const badge = document.getElementById('narrativeSourceBadge');
+  if (badge) {
+    badge.textContent = nav.generated_by || 'Live Telemetry Grounded';
+  }
+  const recProj = document.getElementById('recProjectCode');
+  if (recProj && state.reportData) {
+    recProj.textContent = state.reportData.project_id;
+  }
+
+  const bulletsBox = document.getElementById('executiveBulletsList');
+  if (bulletsBox) {
+    const bullets = nav.executive_summary_bullets || [];
+    bulletsBox.innerHTML = bullets
+        .map(
+            (b) => `
+      <div class="exec-bullet-item">
+        <div class="exec-bullet-top">
+          <span class="exec-rank-badge">#${b.rank} • ${
+                b.category || 'Executive Insight'}</span>
+          <span class="exec-metric-pill">${b.metric_highlight || ''}</span>
+        </div>
+        <div class="exec-bullet-headline">${b.headline}</div>
+        <div class="exec-bullet-text">${b.narrative}</div>
+      </div>
+    `)
+        .join('');
+  }
+
+  const recsBox = document.getElementById('environmentRecsList');
+  if (recsBox) {
+    const recs = nav.environment_recommendations || [];
+    recsBox.innerHTML = recs
+        .map((r) => {
+          const prio = (r.priority || 'HIGH').toUpperCase();
+          const pillClass = prio === 'HIGH' ?
+              'status-error' :
+              (prio === 'MEDIUM' ? 'status-disabled' : 'status-active');
+          return `
+        <div class="env-rec-item priority-${prio}">
+          <div class="env-rec-top">
+            <span class="env-rec-cat">${r.category || 'Recommendation'}</span>
+            <span class="status-pill ${pillClass}">${prio} PRIORITY</span>
+          </div>
+          <div class="env-rec-title">${r.title}</div>
+          <div class="env-rec-text">${r.recommendation}</div>
+          <div class="env-rec-footer">
+            <span><strong>Target:</strong> <code>${
+              r.target_resources || 'Project Environment'}</code></span>
+            <span class="impact-badge">Impact: ${
+              r.expected_impact || 'High ROI'}</span>
+          </div>
+        </div>
+      `;
+        })
+        .join('');
+  }
+}
+
+async function generateOnDemandNarrative() {
+  const btn = document.getElementById('generateNarrativeBtn');
+  if (!btn) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '✨ Synthesizing with Gemini 2.5 Flash...';
+
+  try {
+    const res = await fetch('/api/narrative', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        engine_id: state.engineId,
+        use_llm: true,
+      }),
+    });
+    const data = await res.json();
+    state.narrativeData = data;
+    renderNarrativeSection();
+    showToast(
+        'Generated fresh on-demand Executive Summary & Recommendations via Vertex AI Gemini 2.5 Flash');
+  } catch (e) {
+    showToast('Error generating on-demand narrative; showing live baseline.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+/* ==========================================================================
+   3. TEXT-TO-SPEECH ("READ ME THE REPORT") AUDIO PLAYER
+   ========================================================================== */
+function getActiveTtsScript() {
+  const nav = state.narrativeData ||
+      (state.reportData && state.reportData.narrative_report);
+  if (!nav) return '';
+  if (nav.tts_script) return nav.tts_script;
+  const bullets = (nav.executive_summary_bullets || [])
+                      .map((b) => `Point ${b.rank}: ${b.headline}. ${b.narrative}`)
+                      .join(' ');
+  const recs = (nav.environment_recommendations || [])
+                   .map((r, i) => `Recommendation ${i + 1}: ${r.title}. ${r.recommendation}`)
+                   .join(' ');
+  return `Executive Summary: ${bullets}. Environment Recommendations: ${recs}`;
+}
+
+function updateTtsUiState(statusText, progressPct, isPlaying, isPaused = false) {
+  state.ttsPlaying = isPlaying;
+  state.ttsPaused = isPaused;
+
+  const playBtn = document.getElementById('ttsPlayToggleBtn');
+  const headerBtn = document.getElementById('headerTtsBtn');
+  const stopBtn = document.getElementById('ttsStopBtn');
+  const statusEl = document.getElementById('ttsStatusTitle');
+  const progEl = document.getElementById('ttsProgressFill');
+  const iconEl = document.getElementById('ttsPlayIcon');
+  const labelEl = document.getElementById('ttsPlayLabel');
+
+  if (statusEl && statusText) statusEl.textContent = statusText;
+  if (progEl && progressPct !== null) {
+    progEl.style.width = `${Math.min(Math.max(progressPct, 0), 100)}%`;
+  }
+  if (stopBtn) stopBtn.disabled = !isPlaying && !isPaused;
+
+  if (isPlaying && !isPaused) {
+    if (iconEl) iconEl.textContent = '⏸';
+    if (labelEl) labelEl.textContent = 'Pause Reading';
+    playBtn?.classList.add('playing');
+    if (headerBtn) {
+      headerBtn.textContent = '⏸ Pause Report Audio';
+      headerBtn.classList.add('playing');
+    }
+  } else if (isPaused) {
+    if (iconEl) iconEl.textContent = '▶';
+    if (labelEl) labelEl.textContent = 'Resume Reading';
+    playBtn?.classList.remove('playing');
+    if (headerBtn) {
+      headerBtn.textContent = '▶ Resume Report Audio';
+      headerBtn.classList.remove('playing');
+    }
+  } else {
+    if (iconEl) iconEl.textContent = '🔊';
+    if (labelEl) labelEl.textContent = 'Read Me the Report';
+    playBtn?.classList.remove('playing');
+    if (headerBtn) {
+      headerBtn.textContent = '🔊 Read Me the Report';
+      headerBtn.classList.remove('playing');
+    }
+  }
+}
+
+function stopTtsPlayback() {
+  const audioEl = document.getElementById('ttsAudioElement');
+  if (audioEl) {
+    audioEl.pause();
+    audioEl.currentTime = 0;
+  }
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  clearInterval(state._webSpeechTimer);
+  state.ttsMode = null;
+  updateTtsUiState(
+      'Audio Briefing Ready (Executive Summary + Environment Recommendations)',
+      0,
+      false,
+      false);
+}
+
+async function toggleTtsPlayback() {
+  const audioEl = document.getElementById('ttsAudioElement');
+  const voice = document.getElementById('ttsVoiceSelect')?.value || 'en-US-Neural2-F';
+  const rate = Number(document.getElementById('ttsRateSelect')?.value || 1.08);
+
+  // If currently playing or paused, toggle pause/resume
+  if (state.ttsPlaying && !state.ttsPaused) {
+    if (state.ttsMode === 'CLOUD_AUDIO' && audioEl) {
+      audioEl.pause();
+    } else if (state.ttsMode === 'WEB_SPEECH' && 'speechSynthesis' in window) {
+      window.speechSynthesis.pause();
+    }
+    updateTtsUiState('Paused — Click Resume to continue listening', null, false, true);
+    return;
+  }
+
+  if (state.ttsPaused) {
+    if (state.ttsMode === 'CLOUD_AUDIO' && audioEl) {
+      audioEl.play();
+    } else if (state.ttsMode === 'WEB_SPEECH' && 'speechSynthesis' in window) {
+      window.speechSynthesis.resume();
+    }
+    updateTtsUiState('Reading Executive Summary & Environment Recommendations...', null, true, false);
+    return;
+  }
+
+  // Start fresh TTS playback
+  const scriptText = getActiveTtsScript();
+  if (!scriptText) {
+    showToast('Report data is still loading.');
+    return;
+  }
+
+  if (voice === 'BROWSER_SPEECH') {
+    startWebSpeechFallback(scriptText, rate);
+    return;
+  }
+
+  updateTtsUiState('Synthesizing neural audio via Google Cloud Text-to-Speech API...', 10, true, false);
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        text: scriptText,
+        voice_name: voice,
+        speaking_rate: rate,
+      }),
+    });
+    const data = await res.json();
+    if (data.status === 'OK' && data.audio_base64 && audioEl) {
+      state.ttsMode = 'CLOUD_AUDIO';
+      audioEl.src = `data:${data.audio_mime || 'audio/mpeg'};base64,${data.audio_base64}`;
+      audioEl.ontimeupdate = () => {
+        if (audioEl.duration > 0) {
+          const pct = (audioEl.currentTime / audioEl.duration) * 100;
+          const phase = pct < 52 ?
+              'Reading Part 1: Top 5 Executive Summary Insights...' :
+              'Reading Part 2: Environment Recommendations...';
+          updateTtsUiState(`${phase} (${Math.round(pct)}%)`, pct, true, false);
+        }
+      };
+      audioEl.onended = () => {
+        updateTtsUiState(
+            'Finished reading Executive Summary & Recommendations', 100, false, false);
+      };
+      await audioEl.play();
+      showToast(`Playing report audio (${voice})`);
+      return;
+    }
+  } catch (e) {
+    // Fallback to browser Web Speech API if Cloud TTS encounters an issue
+  }
+
+  startWebSpeechFallback(scriptText, rate);
+}
+
+function startWebSpeechFallback(scriptText, rate) {
+  if (!('speechSynthesis' in window)) {
+    updateTtsUiState('Speech synthesis not supported in this browser', 0, false, false);
+    return;
+  }
+  window.speechSynthesis.cancel();
+  state.ttsMode = 'WEB_SPEECH';
+  const utter = new SpeechSynthesisUtterance(scriptText);
+  utter.rate = rate;
+  utter.lang = 'en-US';
+
+  let elapsed = 0;
+  const estDurationSec = Math.max(scriptText.split(/\s+/).length / (2.6 * rate), 15);
+  clearInterval(state._webSpeechTimer);
+  state._webSpeechTimer = setInterval(() => {
+    if (state.ttsPlaying && !state.ttsPaused) {
+      elapsed += 0.5;
+      const pct = Math.min((elapsed / estDurationSec) * 100, 96);
+      updateTtsUiState(
+          `Reading Report via Browser Speech Engine (${Math.round(pct)}%)...`,
+          pct,
+          true,
+          false);
+    }
+  }, 500);
+
+  utter.onend = () => {
+    clearInterval(state._webSpeechTimer);
+    updateTtsUiState('Finished reading Executive Summary & Recommendations', 100, false, false);
+  };
+  utter.onerror = () => {
+    clearInterval(state._webSpeechTimer);
+    stopTtsPlayback();
+  };
+
+  updateTtsUiState('Reading Report via Browser Speech Engine...', 5, true, false);
+  window.speechSynthesis.speak(utter);
+}
+
+/* ==========================================================================
+   4. AGENT PLATFORM MODEL BILLING & TOKEN CONSUMPTION
+      (PER MODEL, PER AGENT, PER PROJECT & APP)
+   ========================================================================== */
+function renderModelBillingSection() {
+  if (!state.reportData || !state.reportData.model_billing) return;
+  const mb = state.reportData.model_billing;
+  const binfo = mb.billing_info || {};
+  const byModel = mb.by_model || [];
+  const byAgent = mb.by_agent || [];
+  const byProj = mb.by_project_and_engine || [];
+
+  // Header & Summary Strip
+  const acctBadge = document.getElementById('billingAccountBadge');
+  if (acctBadge) {
+    acctBadge.textContent = `${binfo.billing_account_name || 'billingAccounts/linked'}`;
+  }
+  const stBadge = document.getElementById('billingStatusBadge');
+  if (stBadge) {
+    stBadge.textContent = binfo.billing_enabled ? '● Billing Active' : 'Billing Unlinked';
+  }
+
+  document.getElementById('tbCountModels').textContent = byModel.length;
+  document.getElementById('tbCountAgents').textContent = byAgent.length;
+  document.getElementById('tbCountEngines').textContent = byProj.length;
+
+  document.getElementById('tbTotalTokens').textContent =
+      fmtNum(binfo.total_live_tokens);
+  document.getElementById('tbInputTokens').textContent =
+      `${fmtNum(binfo.total_live_input_tokens)} (${
+          Math.round((binfo.total_live_input_tokens / Math.max(binfo.total_live_tokens, 1)) * 100)}%)`;
+  document.getElementById('tbOutputTokens').textContent =
+      `${fmtNum(binfo.total_live_output_tokens)} (${
+          Math.round((binfo.total_live_output_tokens / Math.max(binfo.total_live_tokens, 1)) * 100)}%)`;
+  document.getElementById('tbInvocations').textContent =
+      fmtNum(binfo.total_live_invocations);
+  document.getElementById('tbModelSpend').textContent =
+      `$${fmtUsd(binfo.total_model_token_spend_usd)}`;
+
+  // Visual Token Distribution Bars (Top 6 Models with non-zero tokens or registered agents)
+  const barsBox = document.getElementById('modelTokenBarsBox');
+  if (barsBox) {
+    const topModels = byModel.slice(0, 6);
+    const maxTok = Math.max(
+        ...topModels.map((m) => Math.max(m.input_tokens_30d, m.output_tokens_30d)),
+        1000);
+    barsBox.innerHTML = topModels
+        .map((m) => {
+          const inW = Math.max((m.input_tokens_30d / maxTok) * 76, 1.5);
+          const outW = Math.max((m.output_tokens_30d / maxTok) * 76, 1.5);
+          return `
+        <div class="bar-group-row">
+          <div>
+            <div class="bar-group-label-title"><code>${m.model_id}</code></div>
+            <div class="bar-group-label-sub">${m.invocations_30d} calls • ${
+              m.registered_agents_count} GE agents • $${
+              fmtUsd(m.total_token_spend_usd)}</div>
+          </div>
+          <div class="bar-tracks-col">
+            <div class="bar-track-line">
+              <div class="bar-fill bar-fill-blue" style="width: ${
+              inW.toFixed(1)}%;"></div>
+              <span class="bar-val-text">${fmtNum(m.input_tokens_30d)} in</span>
+            </div>
+            <div class="bar-track-line">
+              <div class="bar-fill bar-fill-teal" style="width: ${
+              outW.toFixed(1)}%;"></div>
+              <span class="bar-val-text">${
+              fmtNum(m.output_tokens_30d)} out (${m.token_share_pct}% total)</span>
+            </div>
+          </div>
+        </div>
+      `;
+        })
+        .join('');
+  }
+
+  const q = state.billingSearch.trim().toLowerCase();
+
+  // Tab 1: Per Model Table
+  const modelTbody = document.getElementById('billingModelTableBody');
+  if (modelTbody) {
+    const filtModels = byModel.filter(
+        (m) => !q ||
+            `${m.model_id} ${m.tier_label} ${m.locations}`
+                .toLowerCase()
+                .includes(q));
+    modelTbody.innerHTML = filtModels
+        .map(
+            (m) => `
+      <tr>
+        <td><span class="gcp-link-name"><code>${m.model_id}</code></span></td>
+        <td><span class="status-pill status-private">${m.tier_label}</span></td>
+        <td><code>${m.locations}</code></td>
+        <td>${fmtNum(m.invocations_30d)}</td>
+        <td>${fmtNum(m.input_tokens_30d)}</td>
+        <td>${fmtNum(m.output_tokens_30d)}</td>
+        <td><strong>${fmtNum(m.total_tokens_30d)}</strong></td>
+        <td>${m.token_share_pct}%</td>
+        <td>${m.registered_agents_count} agents</td>
+        <td>$${m.input_rate_per_1m_usd} / $${m.output_rate_per_1m_usd}</td>
+        <td><strong>$${fmtUsd(m.total_token_spend_usd)}</strong></td>
+      </tr>
+    `)
+        .join('');
+  }
+
+  // Tab 2: Per Agent Table
+  const agentTbody = document.getElementById('billingAgentTableBody');
+  if (agentTbody) {
+    const filtAgents = byAgent.filter(
+        (a) => !q ||
+            `${a.display_name} ${a.agent_id} ${a.model_id} ${a.engine_name} ${a.subtype}`
+                .toLowerCase()
+                .includes(q));
+    agentTbody.innerHTML = filtAgents
+        .map(
+            (a) => `
+      <tr>
+        <td>
+          <span class="gcp-link-name">${a.display_name}</span>
+          <div class="muted" style="font-size: 11px;"><code>${a.agent_id}</code></div>
+        </td>
+        <td>${a.engine_name}</td>
+        <td><span class="status-pill status-private">${a.subtype}</span></td>
+        <td><code>${a.model_id}</code></td>
+        <td><span class="status-pill ${
+                a.state === 'ENABLED' ? 'status-active' : 'status-private'}">${
+                a.state}</span></td>
+        <td>${fmtNum(a.inferred_sessions)}</td>
+        <td>${fmtNum(a.input_tokens_30d)}</td>
+        <td>${fmtNum(a.output_tokens_30d)}</td>
+        <td><strong>${fmtNum(a.total_tokens_30d)}</strong></td>
+        <td>$${fmtUsd(a.token_spend_usd)}</td>
+        <td><strong>$${fmtUsd(a.inferred_spend_usd)}</strong></td>
+      </tr>
+    `)
+        .join('');
+  }
+
+  // Tab 3: Per Project & Engine Table
+  const projTbody = document.getElementById('billingProjectTableBody');
+  if (projTbody) {
+    const filtProj = byProj.filter(
+        (p) => !q ||
+            `${p.project_id} ${p.engine_name} ${p.engine_id} ${p.primary_models}`
+                .toLowerCase()
+                .includes(q));
+    const rollupRow = `
+      <tr class="row-project-rollup">
+        <td><code>${binfo.project_id}</code></td>
+        <td><strong>ALL PROJECT ENGINES (${byProj.length} Apps • Billing: ${
+        binfo.billing_account_name})</strong></td>
+        <td><strong>${state.reportData.kpis.total_agents} (${
+        state.reportData.kpis.enabled_agents} Enabled)</strong></td>
+        <td><code>All ${binfo.active_models_count} Active Publisher Models</code></td>
+        <td><strong>${fmtNum(state.reportData.kpis.inferred_sessions_30d)}</strong></td>
+        <td><strong>${fmtNum(binfo.total_live_input_tokens)}</strong></td>
+        <td><strong>${fmtNum(binfo.total_live_output_tokens)}</strong></td>
+        <td><strong>${fmtNum(binfo.total_live_tokens)}</strong></td>
+        <td><strong>100.0%</strong></td>
+        <td><strong>$${fmtUsd(binfo.total_model_token_spend_usd)}</strong></td>
+        <td><strong>$${fmtUsd(state.reportData.kpis.total_spend_usd)}</strong></td>
+      </tr>
+    `;
+    projTbody.innerHTML = rollupRow +
+        filtProj
+            .map(
+                (p) => `
+      <tr>
+        <td><code>${p.project_id}</code></td>
+        <td>
+          <span class="gcp-link-name">${p.engine_name}</span>
+          <div class="muted" style="font-size: 11px;"><code>${p.engine_id}</code></div>
+        </td>
+        <td>${p.agents_count} (${p.enabled_agents_count} Enabled)</td>
+        <td><code>${p.primary_models}</code></td>
+        <td>${fmtNum(p.sessions_30d)}</td>
+        <td>${fmtNum(p.input_tokens_30d)}</td>
+        <td>${fmtNum(p.output_tokens_30d)}</td>
+        <td><strong>${fmtNum(p.total_tokens_30d)}</strong></td>
+        <td>${p.token_share_pct}%</td>
+        <td>$${fmtUsd(p.token_spend_usd)}</td>
+        <td><strong>$${fmtUsd(p.total_engine_spend_usd)}</strong></td>
+      </tr>
+    `)
+            .join('');
+  }
+}
+
+/* ==========================================================================
+   5. GOOGLE-PALETTE WORKSTREAMS & DELIVERABLES PAIRED BARS
    ========================================================================== */
 function renderWorkstreamsChart() {
   const box = document.getElementById('workstreamsChartBox');
@@ -234,7 +740,7 @@ function renderDeliverablesChart() {
 }
 
 /* ==========================================================================
-   3. CONNECTED DATA STORES TABLE (MATCHING GCP CONSOLE SCREENSHOT 1)
+   6. CONNECTED DATA STORES TABLE
    ========================================================================== */
 function renderDatastoresTable() {
   const tbody = document.getElementById('datastoresTableBody');
@@ -301,7 +807,7 @@ function renderDatastoresTable() {
 }
 
 /* ==========================================================================
-   4. REGISTERED AGENTS TABLE — ALL 100+ AGENTS (MATCHING SCREENSHOT 2)
+   7. REGISTERED AGENTS TABLE — ALL 122 AGENTS
    ========================================================================== */
 function renderAgentsTable() {
   const tbody = document.getElementById('agentsTableBody');
@@ -330,7 +836,7 @@ function renderAgentsTable() {
     }
     if (q) {
       const hay = `${a.display_name} ${a.agent_id} ${a.agent_type} ${
-                      a.engine_name} ${a.description}`
+                      a.model_id} ${a.engine_name} ${a.description}`
                       .toLowerCase();
       if (!hay.includes(q)) return false;
     }
@@ -365,9 +871,10 @@ function renderAgentsTable() {
         </td>
         <td><code>${a.agent_id}</code></td>
         <td>${a.agent_type}</td>
+        <td><code>${a.model_id || 'gemini-3.5-flash'}</code></td>
         <td>${statePill}</td>
         <td>${a.engine_name}</td>
-        <td>${a.create_time_fmt}</td>
+        <td>${fmtNum(a.total_tokens_30d)}</td>
         <td>${a.update_time_fmt}</td>
         <td>$${fmtUsd(a.inferred_spend_usd)}</td>
       </tr>
@@ -377,18 +884,181 @@ function renderAgentsTable() {
 }
 
 /* ==========================================================================
-   5. INTERACTIVE REACTFLOW DATA & AGENT LINEAGE GRAPH
+   8. INTERACTIVE REACTFLOW DATA & AGENT LINEAGE GRAPH — ALL 122 AGENTS
    ========================================================================== */
-function fitLineageViewToContainer() {
+function getVisibleLineageNodesAndEdges() {
+  if (!state.lineageData) return {nodes: [], edges: [], maxX: 1500, maxY: 700};
+
+  const allNodes = state.lineageData.nodes || [];
+  const allEdges = state.lineageData.edges || [];
+  const q = state.lineageSearch.trim().toLowerCase();
+  const subtypeFilter = state.lineageSubtypeFilter;
+  const mode = state.lineageLayoutMode;
+
+  const dsNodes = allNodes.filter((n) => n.layer === 'DATA_STORE');
+  const engNodes = allNodes.filter((n) => n.layer === 'GE_ENGINE');
+  let agNodes = allNodes.filter((n) => n.layer === 'GE_AGENT');
+  let reNodes = allNodes.filter((n) => n.layer === 'REASONING_ENGINE');
+
+  // Filter agents by subtype if selected
+  if (subtypeFilter !== 'ALL') {
+    agNodes = agNodes.filter((n) => {
+      if (subtypeFilter === 'Managed') {
+        return n.subtype === 'Managed' || n.subtype === 'Core Assistant';
+      }
+      return n.subtype === subtypeFilter;
+    });
+  }
+
+  // Filter by search query if typed
+  const matchesQuery = (n) => {
+    if (!q) return true;
+    const hay = `${n.data.title} ${n.data.subtitle} ${n.data.category} ${
+                    n.data.details}`
+                    .toLowerCase();
+    return hay.includes(q);
+  };
+
+  if (q) {
+    agNodes = agNodes.filter(matchesQuery);
+  }
+
+  if (mode === 'ADK_ONLY') {
+    agNodes = agNodes.filter((n) => n.has_re || n.has_error);
+    reNodes = reNodes.filter((n) => n.subtype === 'LINKED_ADK');
+  }
+
+  // Pagination for PAGINATED mode
+  const totalAgentPages = Math.max(Math.ceil(agNodes.length / state.lineagePageSize), 1);
+  if (state.lineagePage > totalAgentPages) state.lineagePage = 1;
+  const pagerBox = document.getElementById('lineagePagerBox');
+  const pageLabel = document.getElementById('lineagePageLabel');
+  if (pagerBox) {
+    if (mode === 'PAGINATED') {
+      pagerBox.classList.remove('hidden');
+      if (pageLabel) {
+        pageLabel.textContent =
+            `Page ${state.lineagePage} / ${totalAgentPages} (${agNodes.length} Agents)`;
+      }
+    } else {
+      pagerBox.classList.add('hidden');
+    }
+  }
+
+  if (mode === 'PAGINATED') {
+    const startIdx = (state.lineagePage - 1) * state.lineagePageSize;
+    agNodes = agNodes.slice(startIdx, startIdx + state.lineagePageSize);
+  }
+
+  // Compute dynamic layout coordinates based on active view mode
+  const positionedNodes = [];
+
+  if (mode === 'MATRIX') {
+    // Tier 1: Data Stores (2 sub-columns: x=20, x=275)
+    const dsCols = dsNodes.length > 10 ? 2 : 1;
+    dsNodes.forEach((n, idx) => {
+      const col = idx % dsCols;
+      const row = Math.floor(idx / dsCols);
+      positionedNodes.push({
+        ...n,
+        position: {x: 20 + col * 255, y: 24 + row * 94},
+      });
+    });
+
+    // Tier 2: GE Apps (1 column: x=560)
+    engNodes.forEach((n, idx) => {
+      positionedNodes.push({
+        ...n,
+        position: {x: 560, y: 24 + idx * 94},
+      });
+    });
+
+    // Tier 3: All 122 Registered Agents (4 sub-columns: x=850, 1105, 1360, 1615)
+    const agCols = agNodes.length > 24 ? 4 : (agNodes.length > 8 ? 2 : 1);
+    agNodes.forEach((n, idx) => {
+      const col = idx % agCols;
+      const row = Math.floor(idx / agCols);
+      positionedNodes.push({
+        ...n,
+        position: {x: 850 + col * 255, y: 24 + row * 92},
+      });
+    });
+
+    // Tier 4: All 43 Vertex AI Reasoning Engines (2 sub-columns after Agents)
+    const reBaseX = 850 + agCols * 255 + 35;
+    const reCols = reNodes.length > 12 ? 2 : 1;
+    reNodes.forEach((n, idx) => {
+      const col = idx % reCols;
+      const row = Math.floor(idx / reCols);
+      positionedNodes.push({
+        ...n,
+        position: {x: reBaseX + col * 255, y: 24 + row * 94},
+      });
+    });
+  } else {
+    // Stream / Paginated / ADK Focus 4-column layout
+    dsNodes.forEach((n, idx) => {
+      positionedNodes.push({
+        ...n,
+        position: {x: 20, y: 24 + idx * 94},
+      });
+    });
+    engNodes.forEach((n, idx) => {
+      positionedNodes.push({
+        ...n,
+        position: {x: 390, y: 24 + idx * 94},
+      });
+    });
+    agNodes.forEach((n, idx) => {
+      positionedNodes.push({
+        ...n,
+        position: {x: 760, y: 24 + idx * 94},
+      });
+    });
+    reNodes.forEach((n, idx) => {
+      positionedNodes.push({
+        ...n,
+        position: {x: 1130, y: 24 + idx * 94},
+      });
+    });
+  }
+
+  const visibleIds = new Set(positionedNodes.map((n) => n.id));
+  const visibleEdges = allEdges.filter(
+      (e) => visibleIds.has(e.source) && visibleIds.has(e.target));
+
+  // Update tier count badges
+  document.getElementById('tierCountDs').textContent = dsNodes.length;
+  document.getElementById('tierCountEng').textContent = engNodes.length;
+  document.getElementById('tierCountAg').textContent = agNodes.length;
+  document.getElementById('tierCountRe').textContent = reNodes.length;
+
+  const badgeEl = document.getElementById('lineageTotalCountBadge');
+  if (badgeEl) {
+    badgeEl.textContent =
+        `Showing ${agNodes.length} Agents • ${positionedNodes.length} Total Nodes • ${visibleEdges.length} Edges`;
+  }
+
+  const maxX = Math.max(...positionedNodes.map((n) => n.position.x + 265), 1450);
+  const maxY = Math.max(...positionedNodes.map((n) => n.position.y + 115), 680);
+
+  return {nodes: positionedNodes, edges: visibleEdges, maxX, maxY};
+}
+
+function fitLineageViewToContainer(fitAll = false) {
   const container = document.getElementById('reactflowLineageContainer');
+  const {maxX, maxY} = getVisibleLineageNodesAndEdges();
   if (container && container.clientWidth > 200) {
-    const targetW = 1430;
-    const z = Math.min(
-        Math.max((container.clientWidth - 24) / targetW, 0.54), 0.95);
-    state.lineageZoom = Number(z.toFixed(3));
-    state.lineagePanX = 12;
-    state.lineagePanY =
-        Math.max(Math.round((container.clientHeight - 660 * z) / 2), 12);
+    const scaleX = (container.clientWidth - 28) / maxX;
+    const scaleY = (container.clientHeight - 28) / maxY;
+    const z = fitAll ?
+        Math.min(scaleX, scaleY, 0.95) :
+        Math.min(Math.max(scaleX, 0.42), 0.95);
+    state.lineageZoom = Number(Math.max(z, 0.22).toFixed(3));
+    state.lineagePanX = 10;
+    state.lineagePanY = 10;
+    container.scrollTop = 0;
+    container.scrollLeft = 0;
   }
 }
 
@@ -398,9 +1068,10 @@ async function loadLineage() {
   const data = await res.json();
   state.lineageData = data;
   if (!state.lineageSelectedNodeId && data.nodes && data.nodes.length > 0) {
-    state.lineageSelectedNodeId = data.nodes[0].id;
+    const firstAg = data.nodes.find((n) => n.layer === 'GE_AGENT');
+    state.lineageSelectedNodeId = (firstAg || data.nodes[0]).id;
   }
-  fitLineageViewToContainer();
+  fitLineageViewToContainer(false);
   renderLineageCanvas();
   if (state.lineageSelectedNodeId) {
     updateLineageInspector(state.lineageSelectedNodeId);
@@ -411,15 +1082,15 @@ function renderLineageCanvas() {
   const container = document.getElementById('reactflowLineageContainer');
   if (!container || !state.lineageData) return;
 
-  const nodes = state.lineageData.nodes || [];
-  const edges = state.lineageData.edges || [];
+  const {nodes, edges, maxX, maxY} = getVisibleLineageNodesAndEdges();
   const nodeMap = {};
   nodes.forEach((n) => {
     nodeMap[n.id] = n;
   });
 
-  const NODE_W = 245;
-  const NODE_H = 92;
+  const NODE_W = 242;
+  const NODE_H = 84;
+  const q = state.lineageSearch.trim().toLowerCase();
 
   const edgesSvgHtml = edges
       .map((e) => {
@@ -430,7 +1101,7 @@ function renderLineageCanvas() {
         const y1 = src.position.y + NODE_H / 2;
         const x2 = tgt.position.x;
         const y2 = tgt.position.y + NODE_H / 2;
-        const dx = Math.max(Math.abs(x2 - x1) * 0.48, 42);
+        const dx = Math.max(Math.abs(x2 - x1) * 0.42, 36);
         const pathD =
             `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 
@@ -442,19 +1113,21 @@ function renderLineageCanvas() {
         const animClass = (state.lineageAnimated && e.animated) ?
             'rf-edge-animated' :
             '';
+        const hiClass = isSelected ? 'edge-highlighted' : '';
         const midX = (x1 + x2) / 2;
         const midY = (y1 + y2) / 2;
-        const labelW = Math.max((e.label || '').length * 6.0 + 12, 54);
+        const showLabel = isSelected || edges.length <= 45;
+        const labelW = Math.max((e.label || '').length * 5.8 + 10, 48);
 
         return `
       <g>
-        <path d="${pathD}" class="rf-edge-path ${animClass}" stroke="${
+        <path d="${pathD}" class="rf-edge-path ${animClass} ${hiClass}" stroke="${
             strokeColor}" marker-end="url(#rfArrow)" />
         ${
-            e.label ?
+            (showLabel && e.label) ?
                 `
-          <rect x="${midX - labelW / 2}" y="${midY - 9}" width="${
-                    labelW}" height="17" class="rf-edge-label-bg" />
+          <rect x="${midX - labelW / 2}" y="${midY - 8}" width="${
+                    labelW}" height="16" class="rf-edge-label-bg" />
           <text x="${midX}" y="${
                     midY + 3}" text-anchor="middle" class="rf-edge-label-text">${
                     e.label}</text>
@@ -470,8 +1143,12 @@ function renderLineageCanvas() {
         const isSelected = state.lineageSelectedNodeId === n.id;
         const warnClass =
             n.data.status === 'WARNING' ? 'rf-node-warning' : '';
+        const matchClass = (q &&
+            `${n.data.title} ${n.data.subtitle}`.toLowerCase().includes(q)) ?
+            'rf-node-match' :
+            '';
         return `
-      <div class="rf-node rf-node-tier-${n.layer} ${warnClass} ${
+      <div class="rf-node rf-node-tier-${n.layer} ${warnClass} ${matchClass} ${
             isSelected ? 'selected' : ''}"
            data-node-id="${n.id}"
            style="left: ${n.position.x}px; top: ${n.position.y}px;">
@@ -480,7 +1157,7 @@ function renderLineageCanvas() {
           <span class="rf-node-cat">${n.layer.replace('_', ' ')}</span>
           <span class="rf-node-badge">${n.data.badge}</span>
         </div>
-        <div class="rf-node-title">${n.data.title}</div>
+        <div class="rf-node-title" title="${n.data.title}">${n.data.title}</div>
         <div class="rf-node-sub">${n.data.subtitle}</div>
         <div class="rf-node-metrics">${n.data.metrics}</div>
         <span class="rf-handle rf-handle-right"></span>
@@ -489,54 +1166,34 @@ function renderLineageCanvas() {
       })
       .join('');
 
+  const scaledW = Math.round(maxX * state.lineageZoom + 40);
+  const scaledH = Math.round(maxY * state.lineageZoom + 40);
+
   container.innerHTML = `
-    <div id="rfStage" class="rf-stage" style="transform: translate(${
+    <div style="width: ${scaledW}px; height: ${scaledH}px; position: relative;">
+      <div id="rfStage" class="rf-stage" style="width: ${maxX}px; height: ${maxY}px; transform: translate(${
       state.lineagePanX}px, ${state.lineagePanY}px) scale(${
       state.lineageZoom});">
-      <svg class="rf-edges-svg" viewBox="0 0 1450 680">
-        <defs>
-          <marker id="rfArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 1 L 10 5 L 0 9 z" fill="#1a73e8" />
-          </marker>
-        </defs>
-        ${edgesSvgHtml}
-      </svg>
-      ${nodesHtml}
+        <svg class="rf-edges-svg" width="${maxX}" height="${maxY}" viewBox="0 0 ${maxX} ${maxY}">
+          <defs>
+            <marker id="rfArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#1a73e8" />
+            </marker>
+          </defs>
+          ${edgesSvgHtml}
+        </svg>
+        ${nodesHtml}
+      </div>
     </div>
   `;
 
   container.querySelectorAll('.rf-node').forEach((nodeEl) => {
     const nid = nodeEl.getAttribute('data-node-id');
-    nodeEl.addEventListener('mousedown', (ev) => {
+    nodeEl.addEventListener('click', (ev) => {
       ev.stopPropagation();
       state.lineageSelectedNodeId = nid;
       updateLineageInspector(nid);
-
-      const nodeObj = (state.lineageData.nodes || []).find((x) => x.id === nid);
-      if (!nodeObj) return;
-      const startX = ev.clientX;
-      const startY = ev.clientY;
-      const origX = nodeObj.position.x;
-      const origY = nodeObj.position.y;
-      let dragged = false;
-
-      const onMove = (me) => {
-        const dx = (me.clientX - startX) / state.lineageZoom;
-        const dy = (me.clientY - startY) / state.lineageZoom;
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-          dragged = true;
-          nodeObj.position.x = Math.round(origX + dx);
-          nodeObj.position.y = Math.round(origY + dy);
-          renderLineageCanvas();
-        }
-      };
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        if (!dragged) renderLineageCanvas();
-      };
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
+      renderLineageCanvas();
     });
   });
 }
@@ -565,13 +1222,17 @@ function updateLineageInspector(nodeId) {
   });
   const rel = (state.lineageData.edges || [])
                   .filter((e) => e.source === nodeId || e.target === nodeId);
+  const edgeCountEl = document.getElementById('inspEdgeCount');
+  if (edgeCountEl) edgeCountEl.textContent = rel.length;
+
   document.getElementById('inspEdgesList').innerHTML = rel
       .map((e) => {
         const isOut = e.source === nodeId;
-        const peer = nodeMap[isOut ? e.target : e.source];
-        const peerTitle = peer ? peer.data.title : (isOut ? e.target : e.source);
+        const peerId = isOut ? e.target : e.source;
+        const peer = nodeMap[peerId];
+        const peerTitle = peer ? peer.data.title : peerId;
         return `
-      <div class="insp-edge-pill">
+      <div class="insp-edge-pill" data-peer-id="${peerId}" style="cursor: pointer;">
         <strong>${isOut ? '→ Downstream:' : '← Upstream:'}</strong> ${peerTitle}
         <div class="muted" style="font-size: 11px;"><code>${
             e.label || 'Linked'}</code></div>
@@ -579,6 +1240,17 @@ function updateLineageInspector(nodeId) {
     `;
       })
       .join('');
+
+  document.querySelectorAll('#inspEdgesList .insp-edge-pill').forEach((el) => {
+    el.addEventListener('click', () => {
+      const pid = el.getAttribute('data-peer-id');
+      if (pid) {
+        state.lineageSelectedNodeId = pid;
+        updateLineageInspector(pid);
+        renderLineageCanvas();
+      }
+    });
+  });
 }
 
 function setupLineageCanvasPan() {
@@ -587,21 +1259,21 @@ function setupLineageCanvasPan() {
   let panning = false;
   let sx = 0;
   let sy = 0;
+  let scrollLeftStart = 0;
+  let scrollTopStart = 0;
+
   container.addEventListener('mousedown', (ev) => {
     if (ev.target.closest('.rf-node')) return;
     panning = true;
-    sx = ev.clientX - state.lineagePanX;
-    sy = ev.clientY - state.lineagePanY;
+    sx = ev.clientX;
+    sy = ev.clientY;
+    scrollLeftStart = container.scrollLeft;
+    scrollTopStart = container.scrollTop;
   });
   window.addEventListener('mousemove', (ev) => {
     if (!panning) return;
-    state.lineagePanX = ev.clientX - sx;
-    state.lineagePanY = ev.clientY - sy;
-    const stage = document.getElementById('rfStage');
-    if (stage) {
-      stage.style.transform = `translate(${state.lineagePanX}px, ${
-          state.lineagePanY}px) scale(${state.lineageZoom})`;
-    }
+    container.scrollLeft = scrollLeftStart - (ev.clientX - sx);
+    container.scrollTop = scrollTopStart - (ev.clientY - sy);
   });
   window.addEventListener('mouseup', () => {
     panning = false;
@@ -609,7 +1281,7 @@ function setupLineageCanvasPan() {
 }
 
 /* ==========================================================================
-   6. LIVE API FRICTIONS & LICENSED USERS
+   9. LIVE API FRICTIONS & LICENSED USERS
    ========================================================================== */
 function renderFrictionsAndUsers() {
   if (!state.reportData) return;
@@ -655,7 +1327,7 @@ function renderFrictionsAndUsers() {
 }
 
 /* ==========================================================================
-   7. BURGER MENU CONFIG & "UNDERSTAND EXPENSE" FORMULA SYNC
+   10. BURGER MENU CONFIG & "UNDERSTAND EXPENSE" FORMULA SYNC
    ========================================================================== */
 async function loadConfig() {
   const res = await fetch('/api/config');
@@ -728,7 +1400,7 @@ async function saveConfigAndRecalculate() {
 }
 
 /* ==========================================================================
-   8. INITIALIZE EVENT LISTENERS
+   11. INITIALIZE EVENT LISTENERS
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
   const drawer = document.getElementById('configDrawerBackdrop');
@@ -757,6 +1429,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('engineSelect')?.addEventListener('change', (e) => {
     state.engineId = e.target.value;
+    state.narrativeData = null;
     loadReport(false);
     loadLineage();
   });
@@ -764,9 +1437,46 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('refreshLiveBtn')?.addEventListener('click', () => {
     loadReport(true);
     loadLineage();
-    showToast('Refreshed live Discovery Engine & Vertex AI telemetry');
+    showToast('Refreshed live Discovery Engine, Cloud Monitoring & Vertex AI telemetry');
   });
 
+  // On-demand Natural Language Narrative & TTS listeners
+  document.getElementById('generateNarrativeBtn')
+      ?.addEventListener('click', generateOnDemandNarrative);
+  document.getElementById('ttsPlayToggleBtn')
+      ?.addEventListener('click', toggleTtsPlayback);
+  document.getElementById('headerTtsBtn')
+      ?.addEventListener('click', () => {
+        document.getElementById('section-narrative')
+            ?.scrollIntoView({behavior: 'smooth', block: 'start'});
+        toggleTtsPlayback();
+      });
+  document.getElementById('ttsStopBtn')
+      ?.addEventListener('click', stopTtsPlayback);
+
+  // Token Billing tabs & search
+  document.querySelectorAll('#tokenBillingTabs .seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#tokenBillingTabs .seg-btn')
+          .forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.billingTab = btn.getAttribute('data-billing-tab') || 'MODEL';
+      document.getElementById('billingPanelModel')
+          ?.classList.toggle('hidden', state.billingTab !== 'MODEL');
+      document.getElementById('billingPanelAgent')
+          ?.classList.toggle('hidden', state.billingTab !== 'AGENT');
+      document.getElementById('billingPanelProject')
+          ?.classList.toggle('hidden', state.billingTab !== 'PROJECT');
+    });
+  });
+
+  document.getElementById('tokenBillingSearch')
+      ?.addEventListener('input', (e) => {
+        state.billingSearch = e.target.value;
+        renderModelBillingSection();
+      });
+
+  // Workstreams & Deliverables sort
   document.getElementById('workstreamsSortSelect')
       ?.addEventListener('change', (e) => {
         state.workstreamsSort = e.target.value;
@@ -818,19 +1528,61 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAgentsTable();
       });
 
-  // Lineage controls
+  // Lineage controls (Layout Mode, Subtype Filter, Search, Pagination, Zoom)
+  document.getElementById('lineageLayoutSelect')
+      ?.addEventListener('change', (e) => {
+        state.lineageLayoutMode = e.target.value;
+        state.lineagePage = 1;
+        fitLineageViewToContainer(false);
+        renderLineageCanvas();
+      });
+
+  document.getElementById('lineageSubtypeSelect')
+      ?.addEventListener('change', (e) => {
+        state.lineageSubtypeFilter = e.target.value;
+        state.lineagePage = 1;
+        fitLineageViewToContainer(false);
+        renderLineageCanvas();
+      });
+
+  document.getElementById('lineageSearchInput')
+      ?.addEventListener('input', (e) => {
+        state.lineageSearch = e.target.value;
+        state.lineagePage = 1;
+        renderLineageCanvas();
+      });
+
+  document.getElementById('lineagePrevPageBtn')
+      ?.addEventListener('click', () => {
+        if (state.lineagePage > 1) {
+          state.lineagePage -= 1;
+          renderLineageCanvas();
+        }
+      });
+
+  document.getElementById('lineageNextPageBtn')
+      ?.addEventListener('click', () => {
+        state.lineagePage += 1;
+        renderLineageCanvas();
+      });
+
   document.getElementById('lineageZoomInBtn')?.addEventListener('click', () => {
-    state.lineageZoom = Math.min(state.lineageZoom + 0.1, 1.3);
+    state.lineageZoom = Math.min(Number((state.lineageZoom + 0.1).toFixed(2)), 1.4);
     renderLineageCanvas();
   });
   document.getElementById('lineageZoomOutBtn')
       ?.addEventListener('click', () => {
-        state.lineageZoom = Math.max(state.lineageZoom - 0.1, 0.45);
+        state.lineageZoom = Math.max(Number((state.lineageZoom - 0.1).toFixed(2)), 0.22);
         renderLineageCanvas();
       });
   document.getElementById('lineageFitViewBtn')
       ?.addEventListener('click', () => {
-        fitLineageViewToContainer();
+        fitLineageViewToContainer(false);
+        renderLineageCanvas();
+      });
+  document.getElementById('lineageFitAllBtn')
+      ?.addEventListener('click', () => {
+        fitLineageViewToContainer(true);
         renderLineageCanvas();
       });
   document.getElementById('lineageToggleAnimBtn')
