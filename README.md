@@ -18,6 +18,10 @@ A lightweight **Google Cloud Run** observability and executive reporting applica
 - **Workstreams & Deliverables Analytics**  
   Visualizes what teams use Gemini Enterprise for (Data Engineering, Procurement, Growth, Legal, Cloud Ops) and the deliverables produced across your agent portfolio.
 
+- **Session Outliers — Complex, Autonomous Work & Most Expensive Sessions (Top 5%)**  
+  - **Complex, autonomous work**: Ranks sessions (`#1`–`#5 by the configured score`) scoring highest on task complexity, time saved, autonomous duration, and expertise required, with an interactive **`Models used, by share of tokens`** popover (`gemini-3.8-flash 83% · high effort`, `gemini-3.1-pro-preview 17% · high effort`) and privacy-masked `[🙈 Session id]` badge.
+  - **Most expensive sessions (`Outliers · the top 5% by usage value`)**: Summarizes top-5% session spend concentration across priced work sessions, plan-included sessions, and excluded off-topic sessions, with an inline ranked list and full-detail modal (`Sessions, most expensive first`).
+
 - **Model Billing & Token Consumption**  
   Tracks 30-day input/output token volume, invocation counts, and estimated spend broken down **per model**, **per agent**, and **per Gemini Enterprise app**.
 

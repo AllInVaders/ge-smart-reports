@@ -374,6 +374,17 @@ const I18N_CATALOG = {
     arch_p3_desc: 'Packaged as a self-contained Cloud Run container that scales automatically to zero and uses native workload identity without storing keys.',
     arch_p4_title: '4. Financial & Operational Transparency',
     arch_p4_desc: 'Every estimated dollar and operational recommendation links transparently to license utilization, active connectors, and live token volume.',
+    nav_outliers: '⚡ Outliers & Top 5% Sessions',
+    outliers_eyebrow: 'Outliers',
+    outliers_autonomous_title: 'Complex, autonomous work',
+    outliers_autonomous_sub: 'Sessions scoring highest on task complexity, time saved, how long Gemini worked on its own, and the expertise required.',
+    outliers_reveal_ids_btn: 'Reveal IDs',
+    outliers_mask_ids_btn: 'Mask IDs',
+    outliers_expensive_title: 'Most expensive sessions',
+    outliers_expensive_sub: 'Outliers · the top 5% by usage value',
+    outliers_open_modal_btn: '⤢ Open Full View',
+    outliers_sessions_first_heading: 'Sessions, most expensive first',
+    outliers_models_popover_title: 'Models used, by share of tokens',
   },
   es: {
     app_title: 'Gemini Enterprise Smart Reports',
@@ -694,6 +705,17 @@ const I18N_CATALOG = {
     arch_p3_desc: 'Empaquetado como un contenedor ligero auto-contenido que escala automáticamente a cero y utiliza la identidad nativa del entorno sin almacenar llaves ni secretos.',
     arch_p4_title: '4. Transparencia Financiera y Operativa',
     arch_p4_desc: 'Cada dólar estimado y cada recomendación operativa se vinculan de forma transparente con el uso de licencias, el volumen de datos indexados y el consumo de tokens.',
+    nav_outliers: '⚡ Outliers y Top 5% de Sesiones',
+    outliers_eyebrow: 'Outliers',
+    outliers_autonomous_title: 'Trabajo complejo y autónomo',
+    outliers_autonomous_sub: 'Sesiones con mayor puntaje en complejidad de tarea, tiempo ahorrado, duración autónoma de Gemini y experiencia requerida.',
+    outliers_reveal_ids_btn: 'Revelar IDs',
+    outliers_mask_ids_btn: 'Enmascarar IDs',
+    outliers_expensive_title: 'Sesiones más costosas',
+    outliers_expensive_sub: 'Outliers · el top 5% por valor de uso',
+    outliers_open_modal_btn: '⤢ Abrir Vista Completa',
+    outliers_sessions_first_heading: 'Sesiones, de mayor a menor costo',
+    outliers_models_popover_title: 'Modelos utilizados, por proporción de tokens',
   },
 };
 
@@ -797,6 +819,7 @@ async function applyTranslations(langCode, fetchLocalizedNarrative = false) {
     renderModelBillingSection();
     renderWorkstreamsChart();
     renderDeliverablesChart();
+    renderOutliersSection();
     renderDatastoresTable();
     renderAgentsTable();
     renderFrictionsAndUsers();
@@ -878,6 +901,7 @@ async function loadReport(forceRefresh = false) {
     renderModelBillingSection();
     renderWorkstreamsChart();
     renderDeliverablesChart();
+    renderOutliersSection();
     renderDatastoresTable();
     renderAgentsTable();
     renderFrictionsAndUsers();
@@ -1646,6 +1670,237 @@ function renderDeliverablesChart() {
     `;
       })
       .join('');
+}
+
+/* ==========================================================================
+   5B. SESSION OUTLIERS: COMPLEX AUTONOMOUS WORK & MOST EXPENSIVE SESSIONS
+   ========================================================================== */
+function renderExpensiveSessionRowsHtml(items) {
+  return (items || [])
+      .map((s) => {
+        const memberBadgeLabel = state.revealPii ?
+            `👤 ${s.member_full || s.member_unmasked || s.member_masked}` :
+            `🙈 ${isEs() ? 'Miembro' : 'Member'}`;
+        const sessionBadgeLabel = state.revealPii ?
+            `🔓 ${s.session_id}` :
+            `🙈 ${isEs() ? 'ID de sesión' : 'Session id'}`;
+        const modelBreakdown = s.models_breakdown || s.model_shares || [];
+        const modelSharesJson = encodeURIComponent(
+            JSON.stringify(modelBreakdown));
+        const modelLabel = isEs() ?
+            (s.model_label_es || s.model_label_en || 'gemini-3.8-flash') :
+            (s.model_label_en || 'gemini-3.8-flash');
+        const delivTitle = isEs() ?
+            (s.deliverable_title_es || s.deliverable_title_en || s.title) :
+            (s.deliverable_title_en || s.title);
+        const sublineText = isEs() ?
+            (s.subline_es || s.subline_en) :
+            (s.subline_en || '');
+        const billedUsd = s.billed_usd ?? s.cost_usd ?? 0;
+
+        return `
+      <div class="expensive-session-row">
+        <div>
+          <div class="expensive-session-meta">
+            <button class="masked-pill-badge js-toggle-outlier-pii" type="button" title="${
+            state.revealPii ? (s.member_full || s.member_unmasked) : 'Click to toggle Member & Session ID visibility'}">${
+            memberBadgeLabel}</button>
+            <span class="dot-sep">·</span>
+            <span>${s.surface}</span>
+            <span class="dot-sep">·</span>
+            <span>${s.date_fmt || s.date_label}</span>
+            <span class="dot-sep">·</span>
+            <button class="model-share-trigger js-model-share-trigger" type="button" data-model-shares="${
+            modelSharesJson}">${modelLabel}</button>
+            <span class="dot-sep">·</span>
+            <button class="masked-pill-badge js-toggle-outlier-pii" type="button" title="${
+            s.session_id}">${sessionBadgeLabel}</button>
+          </div>
+          <div class="expensive-session-title">${delivTitle}</div>
+          <div class="expensive-session-sub">${sublineText}</div>
+        </div>
+        <div class="expensive-session-cost">$${fmtUsd(billedUsd)}</div>
+      </div>
+    `;
+      })
+      .join('');
+}
+
+function showModelSharePopover(triggerEl) {
+  const pop = document.getElementById('modelSharePopover');
+  const rowsBox = document.getElementById('modelSharePopoverRows');
+  if (!pop || !rowsBox || !triggerEl) return;
+
+  let shares = [];
+  try {
+    const raw = triggerEl.getAttribute('data-model-shares') || '[]';
+    shares = JSON.parse(decodeURIComponent(raw));
+  } catch (e) {
+    shares = [];
+  }
+  if (!shares.length) return;
+
+  rowsBox.innerHTML = shares
+      .map((m) => {
+        const eff = isEs() ?
+            (m.effort_es || m.effort_en || m.effort || 'alto esfuerzo') :
+            (m.effort_en || m.effort || 'high effort');
+        return `
+      <div class="model-share-popover-row">
+        <span class="model-share-popover-name">${m.model_id}</span>
+        <span class="model-share-popover-val">${m.share_pct}% · ${eff}</span>
+      </div>
+    `;
+      })
+      .join('');
+
+  pop.classList.remove('hidden');
+  pop.setAttribute('aria-hidden', 'false');
+
+  const rect = triggerEl.getBoundingClientRect();
+  const popW = pop.offsetWidth || 300;
+  const popH = pop.offsetHeight || 110;
+  let left = rect.left + rect.width / 2 - popW / 2;
+  left = Math.max(12, Math.min(left, window.innerWidth - popW - 12));
+  let top = rect.top - popH - 8;
+  if (top < 12) {
+    top = rect.bottom + 8;
+  }
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(top)}px`;
+}
+
+function hideModelSharePopover() {
+  const pop = document.getElementById('modelSharePopover');
+  if (!pop) return;
+  pop.classList.add('hidden');
+  pop.setAttribute('aria-hidden', 'true');
+}
+
+function bindOutliersInteractiveEvents(rootEl) {
+  if (!rootEl) return;
+  rootEl.querySelectorAll('.js-model-share-trigger').forEach((btn) => {
+    btn.addEventListener('mouseenter', () => showModelSharePopover(btn));
+    btn.addEventListener('focus', () => showModelSharePopover(btn));
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      showModelSharePopover(btn);
+    });
+  });
+
+  rootEl.querySelectorAll('.js-toggle-outlier-pii').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      state.revealPii = !state.revealPii;
+      renderOutliersSection();
+      renderFrictionsAndUsers();
+      renderAdoptionTelemetry();
+      showToast(
+          state.revealPii ?
+              (isEs() ? 'IDs de sesión y miembros revelados (Vista Admin)' :
+                        'Session IDs & Members revealed (Admin View)') :
+              (isEs() ? 'IDs de sesión y miembros enmascarados' :
+                        'Session IDs & Members masked'));
+    });
+  });
+}
+
+function renderOutliersSection() {
+  if (!state.reportData) return;
+  const outliers = state.reportData.outliers || {};
+  const autoItems = Array.isArray(outliers.complex_autonomous_work) ?
+      outliers.complex_autonomous_work :
+      (outliers.complex_autonomous_work?.items || []);
+  const expWork = outliers.most_expensive_sessions || {};
+  const expSummary = expWork.summary || expWork || {};
+  const expItems = expWork.sessions || expWork.items || [];
+
+  // Update privacy toggle buttons (inline card + modal)
+  ['outliersPrivacyBtnLeft', 'outliersPrivacyBtnModal'].forEach((btnId) => {
+    const privBtn = document.getElementById(btnId);
+    if (privBtn) {
+      const icon = state.revealPii ? '🔓' : '🙈';
+      const label = state.revealPii ?
+          t('outliers_mask_ids_btn') :
+          t('outliers_reveal_ids_btn');
+      privBtn.innerHTML = `${icon} <span>${label}</span>`;
+    }
+  });
+
+  // 1. Complex, autonomous work list
+  const autoListBox = document.getElementById('outliersAutonomousList');
+  if (autoListBox) {
+    autoListBox.innerHTML = autoItems
+        .map((item) => {
+          const rankLabel = isEs() ?
+              (item.rank_label_es || `#${item.rank} según el puntaje configurado`) :
+              (item.rank_label_en || item.rank_label || `#${item.rank} by the configured score`);
+          const sessionBadgeLabel = state.revealPii ?
+              `🔓 ${item.session_id}` :
+              `🙈 ${isEs() ? 'ID de sesión' : 'Session id'}`;
+          const modelBreakdown = item.models_breakdown || item.model_shares || [];
+          const modelSharesJson = encodeURIComponent(
+              JSON.stringify(modelBreakdown));
+          const modelLabel = isEs() ?
+              (item.model_label_es || item.model_label_en || 'gemini-3.8-flash') :
+              (item.model_label_en || 'gemini-3.8-flash');
+          const titleText = isEs() ?
+              (item.title_es || item.title_en || item.title) :
+              (item.title_en || item.title);
+          const summaryText = isEs() ?
+              (item.summary_es || item.summary_en || item.narrative) :
+              (item.summary_en || item.narrative);
+
+          return `
+        <div class="outlier-autonomous-item">
+          <div class="outlier-meta-line">
+            <span class="outlier-rank-tag">${rankLabel}</span>
+            <span class="dot-sep">·</span>
+            <span>${item.surface}</span>
+            <span class="dot-sep">·</span>
+            <span>${item.date_fmt || item.date_label || 'Sep 25'}</span>
+            <span class="dot-sep">·</span>
+            <button class="model-share-trigger js-model-share-trigger" type="button" data-model-shares="${
+              modelSharesJson}">${modelLabel}</button>
+            <span class="dot-sep">·</span>
+            <button class="masked-pill-badge js-toggle-outlier-pii" type="button" title="${
+              item.session_id}">${sessionBadgeLabel}</button>
+          </div>
+          <div class="outlier-session-title">${titleText}</div>
+          <p class="outlier-session-narrative">${summaryText}</p>
+        </div>
+      `;
+        })
+        .join('');
+    bindOutliersInteractiveEvents(autoListBox);
+  }
+
+  // 2. Most expensive sessions summary paragraph & list (inline + modal)
+  const summaryHtml = isEs() ?
+      (expSummary.narrative_html_es || expSummary.summary_es || expSummary.narrative_html_en || '') :
+      (expSummary.narrative_html_en || expSummary.summary_en || '');
+  const expSummaryBox = document.getElementById('outliersExpensiveNarrative');
+  if (expSummaryBox) {
+    expSummaryBox.innerHTML = summaryHtml;
+  }
+  const modalSummaryBox = document.getElementById('outliersExpensiveModalNarrative');
+  if (modalSummaryBox) {
+    modalSummaryBox.innerHTML = summaryHtml;
+  }
+
+  const rowsHtml = renderExpensiveSessionRowsHtml(expItems);
+
+  const expInlineList = document.getElementById('outliersExpensiveInlineList');
+  if (expInlineList) {
+    expInlineList.innerHTML = rowsHtml;
+    bindOutliersInteractiveEvents(expInlineList);
+  }
+
+  const expModalList = document.getElementById('outliersExpensiveModalList');
+  if (expModalList) {
+    expModalList.innerHTML = rowsHtml;
+    bindOutliersInteractiveEvents(expModalList);
+  }
 }
 
 /* ==========================================================================
@@ -3377,9 +3632,60 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('adoptionPrivacyToggleBtn')
       ?.addEventListener('click', () => {
         state.revealPii = !state.revealPii;
+        renderOutliersSection();
         renderFrictionsAndUsers();
         fetchAdoptionWindow(state.adoptionDays, false);
       });
+
+  // Outliers Privacy Toggle & Most Expensive Sessions Modal
+  const toggleOutliersPrivacy = () => {
+    state.revealPii = !state.revealPii;
+    renderOutliersSection();
+    renderFrictionsAndUsers();
+    renderAdoptionTelemetry();
+    showToast(
+        state.revealPii ?
+            (isEs() ? 'IDs de sesión y miembros revelados (Vista Admin)' :
+                      'Session IDs & Members revealed (Admin View)') :
+            (isEs() ? 'IDs de sesión y miembros enmascarados' :
+                      'Session IDs & Members masked'));
+  };
+  document.getElementById('outliersPrivacyBtnLeft')
+      ?.addEventListener('click', toggleOutliersPrivacy);
+  document.getElementById('outliersPrivacyBtnModal')
+      ?.addEventListener('click', toggleOutliersPrivacy);
+
+  const expModal = document.getElementById('expensiveSessionsModal');
+  const openExpModal = () => {
+    expModal?.classList.remove('hidden');
+    expModal?.setAttribute('aria-hidden', 'false');
+    hideModelSharePopover();
+  };
+  const closeExpModal = () => {
+    expModal?.classList.add('hidden');
+    expModal?.setAttribute('aria-hidden', 'true');
+    hideModelSharePopover();
+  };
+  document.getElementById('openExpensiveSessionsModalBtn')
+      ?.addEventListener('click', openExpModal);
+  document.getElementById('closeExpensiveSessionsModalBtn')
+      ?.addEventListener('click', closeExpModal);
+  expModal?.addEventListener('click', (e) => {
+    if (e.target === expModal) closeExpModal();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeExpModal();
+      hideModelSharePopover();
+    }
+  });
+  window.addEventListener('click', (e) => {
+    if (!e.target.closest('.js-model-share-trigger') &&
+        !e.target.closest('#modelSharePopover')) {
+      hideModelSharePopover();
+    }
+  });
+  window.addEventListener('scroll', () => hideModelSharePopover(), {passive: true});
 
   document.getElementById('saveConfigBtn')
       ?.addEventListener('click', saveConfigAndRecalculate);
@@ -3578,6 +3884,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('togglePiiBtn')?.addEventListener('click', () => {
     state.revealPii = !state.revealPii;
+    renderOutliersSection();
     renderFrictionsAndUsers();
     fetchAdoptionWindow(state.adoptionDays, false);
   });

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=3.5.0" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.6.0" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -83,6 +83,7 @@
             <a href="#section-kpis" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_kpis">📊 Overview &amp; KPIs</a>
             <a href="#section-narrative" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_narrative">✨ Executive Summary &amp; TTS</a>
             <a href="#section-charts" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_charts">📈 Workstreams &amp; Deliverables</a>
+            <a href="#section-outliers" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_outliers">🔥 Outliers (Autonomous &amp; Top 5% Spend)</a>
             <a href="#section-model-billing" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_billing">🪙 Token Billing (Model/Agent)</a>
             <a href="#section-lineage-graph" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_lineage">🕸️ Agent Lineage Graph</a>
             <a href="#section-datastores" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_datastores">🗄️ Connected Data Stores</a>
@@ -418,6 +419,50 @@
           </div>
         </div>
         <div id="deliverablesChartBox" class="paired-bars-list"></div>
+      </div>
+    </section>
+
+    <!-- 3B. Outliers: Complex, Autonomous Work & Most Expensive Sessions (Top 5% by Usage Value) -->
+    <section id="section-outliers" class="outliers-split-grid">
+      <!-- Left Card: Outliers — Complex, autonomous work -->
+      <div class="card outliers-card">
+        <div class="outliers-card-header">
+          <div>
+            <div class="outliers-eyebrow" data-i18n="outliers_eyebrow">Outliers</div>
+            <h2 class="outliers-serif-title" data-i18n="outliers_autonomous_title">Complex, autonomous work</h2>
+            <p class="outliers-sub" data-i18n="outliers_autonomous_sub">
+              Sessions scoring highest on task complexity, time saved, how long Gemini worked on its own, and the expertise required.
+            </p>
+          </div>
+          <div class="outliers-header-actions">
+            <button type="button" id="outliersPrivacyBtnLeft" class="btn btn-secondary btn-sm outliers-privacy-btn" title="Toggle Session ID &amp; Member visibility">
+              🙈 <span data-i18n="outliers_reveal_ids_btn">Reveal IDs</span>
+            </button>
+          </div>
+        </div>
+        <div id="outliersAutonomousList" class="outliers-autonomous-list"></div>
+      </div>
+
+      <!-- Right Card: Most expensive sessions (Outliers · the top 5% by usage value) -->
+      <div class="card outliers-card">
+        <div class="outliers-card-header">
+          <div>
+            <h2 class="outliers-serif-title" data-i18n="outliers_expensive_title">Most expensive sessions</h2>
+            <div class="outliers-eyebrow-sub" data-i18n="outliers_expensive_sub">Outliers &middot; the top 5% by usage value</div>
+          </div>
+          <div class="outliers-header-actions">
+            <button type="button" id="openExpensiveSessionsModalBtn" class="btn btn-primary btn-sm" data-i18n="outliers_open_modal_btn">
+              ⤢ Open Full View
+            </button>
+          </div>
+        </div>
+
+        <p id="outliersExpensiveNarrative" class="expensive-summary-paragraph">
+          Loading top 5% session usage value concentration...
+        </p>
+
+        <div class="expensive-list-heading" data-i18n="outliers_sessions_first_heading">Sessions, most expensive first</div>
+        <div id="outliersExpensiveInlineList" class="expensive-sessions-list"></div>
       </div>
     </section>
 
@@ -1318,7 +1363,38 @@
     </div><!-- /#mainTabArchitecture -->
   </main>
 
+  <!-- Full-Detail Modal: Most expensive sessions (Outliers · the top 5% by usage value) -->
+  <div id="expensiveSessionsModal" class="expensive-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="expensiveModalTitle">
+    <div class="expensive-modal-card">
+      <div class="expensive-modal-header">
+        <div>
+          <h2 id="expensiveModalTitle" class="outliers-serif-title" data-i18n="outliers_expensive_title">Most expensive sessions</h2>
+          <div class="outliers-eyebrow-sub" data-i18n="outliers_expensive_sub">Outliers &middot; the top 5% by usage value</div>
+        </div>
+        <div class="expensive-modal-actions">
+          <button type="button" id="outliersPrivacyBtnModal" class="btn btn-secondary btn-sm outliers-privacy-btn" title="Toggle Session ID &amp; Member visibility">
+            🙈 <span data-i18n="outliers_reveal_ids_btn">Reveal IDs</span>
+          </button>
+          <button type="button" id="closeExpensiveSessionsModalBtn" class="expensive-modal-close-btn" aria-label="Close modal">&times;</button>
+        </div>
+      </div>
+
+      <p id="outliersExpensiveModalNarrative" class="expensive-summary-paragraph">
+        Loading top 5% session usage value concentration...
+      </p>
+
+      <div class="expensive-list-heading" data-i18n="outliers_sessions_first_heading">Sessions, most expensive first</div>
+      <div id="outliersExpensiveModalList" class="expensive-sessions-list expensive-modal-scroll-list"></div>
+    </div>
+  </div>
+
+  <!-- Floating Popover: Models used, by share of tokens -->
+  <div id="modelSharePopover" class="model-share-popover hidden" role="tooltip">
+    <div class="model-share-popover-title" id="modelSharePopoverTitle" data-i18n="outliers_models_popover_title">Models used, by share of tokens</div>
+    <div id="modelSharePopoverRows" class="model-share-popover-rows"></div>
+  </div>
+
   <div id="toastBanner" class="toast hidden"></div>
-  <script src="/static/app.js?v=3.5.0"></script>
+  <script src="/static/app.js?v=3.6.0"></script>
 </body>
 </html>

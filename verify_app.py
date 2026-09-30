@@ -80,6 +80,14 @@ def verify_frontend_v34_requirements(root_dir: str) -> None:
   assert "id=\"indexingConfigBar\"" in html
   assert "renderIndexingCapacityPanel" in js and "applyOrSyncIndexingAlerts" in js
 
+  # 8. v3.6.0: Session Outliers — Complex Autonomous Work & Most Expensive Sessions (Top 5%)
+  assert "id=\"section-outliers\"" in html
+  assert "id=\"outliersAutonomousList\"" in html
+  assert "id=\"outliersExpensiveInlineList\"" in html
+  assert "id=\"expensiveSessionsModal\"" in html
+  assert "id=\"modelSharePopover\"" in html
+  assert "renderOutliersSection" in js and "showModelSharePopover" in js
+
 
 def verify_live_engine() -> None:
   eng = SmartReportEngine()
@@ -128,6 +136,28 @@ def verify_live_engine() -> None:
   })
   assert alert_cfg_res.get("status") == "OK"
   assert len(alert_cfg_res["indexing_capacity"]["alerts"]) >= 2
+
+  # Verify v3.6.0 Session Outliers (Complex Autonomous Work & Most Expensive Sessions Top 5%)
+  outliers = rep.get("outliers") or {}
+  auto_items = outliers.get("complex_autonomous_work") or []
+  exp_work = outliers.get("most_expensive_sessions") or {}
+  exp_summary = exp_work.get("summary") or {}
+  exp_items = exp_work.get("sessions") or []
+  assert len(auto_items) == 5, f"Expected 5 complex autonomous work outliers, got {len(auto_items)}"
+  assert auto_items[0]["rank"] == 1
+  assert auto_items[0]["rank_label_en"] == "#1 by the configured score"
+  assert len(auto_items[0].get("models_breakdown", [])) >= 2
+  assert sum(m["share_pct"] for m in auto_items[0]["models_breakdown"]) == 100
+  assert len(exp_items) >= 4, f"Expected >=4 most expensive session outliers, got {len(exp_items)}"
+  assert exp_items[0]["billed_usd"] >= exp_items[-1]["billed_usd"] > 0
+  assert exp_summary.get("total_priced_sessions", 0) >= 20
+  assert exp_summary.get("top_5pct_share_pct", 0) > 10.0
+  assert "priced work sessions" in exp_summary.get("narrative_html_en", "")
+  assert "sesiones de trabajo" in exp_summary.get("narrative_html_es", "")
+
+  outliers_api = eng.get_session_outliers(engine_filter="ALL")
+  assert len(outliers_api["complex_autonomous_work"]) == 5
+  assert len(outliers_api["most_expensive_sessions"]["sessions"]) >= 4
 
   # Verify Agent Platform Model Billing & Token Consumption
   mb = rep.get("model_billing") or {}
@@ -199,10 +229,11 @@ def verify_live_engine() -> None:
   assert "***" not in ad_unmasked["q1_active_users"]["active_users"][0]["display_principal"]
 
   print(
-      f"VERIFIED OK (v3.5.0): {len(proj_ids)} selectable GCP projects ({', '.join(proj_ids[:3])}), "
+      f"VERIFIED OK (v3.6.0): {len(proj_ids)} selectable GCP projects ({', '.join(proj_ids[:3])}), "
       f"{rep['kpis']['total_engines']} engines, "
       f"{rep['kpis']['total_agents']} agents (Lineage: {lin['counts']['agents']} agents / {len(lin['nodes'])} total nodes), "
       f"{rep['kpis']['total_datastores']} data stores ({idx_cap['total_indexed_fmt']} indexed, {len(idx_alerts)} active >=80% alerts), "
+      f"Outliers ({len(auto_items)} autonomous work, Top 5% = {exp_summary['top_5pct_share_pct']}% of spend / ${exp_summary['top_5pct_billed_usd']:.2f}), "
       f"Conversational TTS ({len(conv_en.split())} words / {len(conv_en)} chars), "
       f"{mb['billing_info']['total_live_tokens']:,} live Cloud Monitoring tokens across {len(mb['by_model'])} models, "
       f"${rep['kpis']['total_spend_usd']} total spend."
@@ -214,3 +245,4 @@ if __name__ == "__main__":
   verify_zero_forbidden_references_or_secrets(root)
   verify_frontend_v34_requirements(root)
   verify_live_engine()
+

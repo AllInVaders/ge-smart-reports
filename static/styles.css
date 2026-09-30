@@ -2621,3 +2621,353 @@ code {
   color: var(--text-secondary);
 }
 
+/* ==========================================================================
+   v3.6.0: OUTLIERS — COMPLEX, AUTONOMOUS WORK & MOST EXPENSIVE SESSIONS (TOP 5%)
+   ========================================================================== */
+.outliers-split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.08fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+@media (max-width: 1180px) {
+  .outliers-split-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.outliers-card {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 24px;
+  position: relative;
+}
+
+.outliers-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.outliers-eyebrow {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.outliers-eyebrow-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.outliers-serif-title {
+  font-family: Georgia, 'Times New Roman', var(--font-display), serif;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.22;
+}
+
+.outliers-sub {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.48;
+}
+
+.outliers-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Left Column: Complex, autonomous work items */
+.outliers-autonomous-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.outlier-autonomous-item {
+  padding: 15px 0;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.outlier-autonomous-item:first-child {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.outlier-autonomous-headline {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.38;
+}
+
+.outlier-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.outlier-meta-sep {
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.outlier-autonomous-summary {
+  font-size: 13.5px;
+  color: var(--text-primary);
+  line-height: 1.48;
+  margin-top: 2px;
+}
+
+/* Dotted-underline interactive model token share trigger */
+.model-share-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-secondary);
+  border-bottom: 1.5px dotted var(--text-secondary);
+  cursor: pointer;
+  padding-bottom: 1px;
+  font-weight: 500;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+
+.model-share-trigger:hover,
+.model-share-trigger:focus-visible {
+  color: var(--google-blue);
+  border-bottom-color: var(--google-blue);
+  outline: none;
+}
+
+/* Masked / Revealed Pill Badges ([🙈 Member], [🙈 Session id]) */
+.masked-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.14s ease;
+}
+
+.masked-pill-badge:hover {
+  border-color: var(--google-blue);
+  color: var(--google-blue);
+  background: var(--google-blue-soft);
+}
+
+.masked-pill-badge.revealed {
+  background: var(--google-blue-soft);
+  color: var(--google-blue);
+  border-color: rgba(66, 133, 244, 0.35);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Right Column & Modal: Most expensive sessions (Outliers · top 5% by usage value) */
+.expensive-summary-paragraph {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  margin: 4px 0 16px;
+}
+
+.expensive-summary-paragraph strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.expensive-list-heading {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.expensive-sessions-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.expensive-session-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.expensive-session-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.expensive-session-cost {
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.expensive-session-deliverable {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.expensive-session-subline {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.38;
+}
+
+/* Floating Popover: Models used, by share of tokens */
+.model-share-popover {
+  position: fixed;
+  z-index: 1200;
+  min-width: 280px;
+  max-width: 340px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  padding: 12px 14px;
+  pointer-events: auto;
+}
+
+.model-share-popover-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.model-share-popover-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.model-share-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.model-share-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.model-share-val {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.model-share-val strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Full-Detail Modal Dialog (#expensiveSessionsModal) */
+.expensive-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.expensive-modal-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  width: 100%;
+  max-width: 680px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 28px;
+  overflow: hidden;
+}
+
+.expensive-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.expensive-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.expensive-modal-close-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.expensive-modal-close-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.expensive-modal-scroll-list {
+  max-height: 58vh;
+  overflow-y: auto;
+}
+
+
