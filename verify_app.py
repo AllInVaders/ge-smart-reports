@@ -71,12 +71,22 @@ def verify_frontend_v34_requirements(root_dir: str) -> None:
   assert "<select id=\"cfgProjectId\"" in html, "cfgProjectId must be a <select> dropdown"
   assert "onProjectDropdownChange" in js
 
+  # 7. v3.5.0: Conversational TTS Briefing Mode + Indexing Capacity & 80% Alert Monitor
+  assert "id=\"ttsModeTabs\"" in html
+  assert "data-tts-mode=\"CONVERSATIONAL\"" in html and "data-tts-mode=\"DETAILED\"" in html
+  assert "id=\"ttsScriptPreviewBox\"" in html
+  assert "id=\"indexingAlertsBanner\"" in html
+  assert "id=\"indexingCapacityGrid\"" in html
+  assert "id=\"indexingConfigBar\"" in html
+  assert "renderIndexingCapacityPanel" in js and "applyOrSyncIndexingAlerts" in js
+
 
 def verify_live_engine() -> None:
   eng = SmartReportEngine()
   cfg = eng.get_config()
   assert "input_price_per_1m_usd" in cfg
   assert "hourly_rate_usd" in cfg
+  assert "alert_threshold_pct" in cfg
 
   # Verify Selectable GCP Projects list (Item 6)
   projs = eng.list_selectable_projects()
@@ -92,6 +102,32 @@ def verify_live_engine() -> None:
       rep["kpis"]["total_datastores"] >= 20
   ), f"Expected >= 20 data stores, got {rep['kpis']['total_datastores']}"
   assert "formula_breakdown" in rep
+
+  # Verify v3.5.0 Indexing Capacity & >=80% Alert Monitor
+  idx_cap = rep.get("indexing_capacity") or {}
+  assert idx_cap.get("total_indexed_bytes", 0) > 500_000_000, (
+      f"Expected >500MB total indexed storage, got {idx_cap.get('total_indexed_bytes')}"
+  )
+  assert idx_cap.get("agent_space_free_bytes", 0) >= 1_000_000_000_000, (
+      f"Expected >=1TiB AgentSpace free quota, got {idx_cap.get('agent_space_free_bytes')}"
+  )
+  assert idx_cap.get("documents_quota_limit", 0) >= 100_000
+  assert idx_cap.get("datastores_quota_limit", 0) >= 100
+  idx_alerts = idx_cap.get("alerts") or []
+  assert len(idx_alerts) >= 2, (
+      f"Expected >=2 connectors/datastores reaching >=80% indexing capacity, got {len(idx_alerts)}"
+  )
+  assert any(a["utilization_pct"] >= 80.0 for a in idx_alerts)
+
+  # Verify POST /api/indexing/alerts handler
+  alert_cfg_res = eng.configure_indexing_alerts({
+      "alert_threshold_pct": 80.0,
+      "datastore_soft_cap_mib": 500.0,
+      "project_soft_cap_mib": 2048.0,
+      "create_gcp_policy": False,
+  })
+  assert alert_cfg_res.get("status") == "OK"
+  assert len(alert_cfg_res["indexing_capacity"]["alerts"]) >= 2
 
   # Verify Agent Platform Model Billing & Token Consumption
   mb = rep.get("model_billing") or {}
@@ -111,19 +147,25 @@ def verify_live_engine() -> None:
   assert len(lin["nodes"]) >= 180
   assert len(lin["edges"]) >= 110
 
-  # Verify Natural Language Executive Summary (5 bullets) & Environment Recommendations in EN & ES
+  # Verify Natural Language Executive Summary (5 bullets), Environment Recommendations & Short Conversational TTS Script
   nav_en = eng.generate_natural_language_report(engine_filter="ALL", use_llm=True, lang="en")
   assert len(nav_en.get("executive_summary_bullets", [])) == 5
   assert len(nav_en.get("environment_recommendations", [])) >= 3
   assert "gemini-3.8-flash" in nav_en.get("generated_by", "")
+  conv_en = nav_en.get("tts_script_conversational") or nav_en.get("tts_script") or ""
+  det_en = nav_en.get("tts_script_detailed") or ""
+  assert 120 <= len(conv_en) <= 750, f"Expected concise conversational script (120..750 chars), got {len(conv_en)}: {conv_en}"
+  assert len(det_en) > len(conv_en), "Expected detailed TTS script to be longer than conversational script"
 
   nav_es = eng.generate_natural_language_report(engine_filter="ALL", use_llm=False, lang="es")
   assert len(nav_es.get("executive_summary_bullets", [])) == 5
   assert nav_es.get("lang") == "es"
+  conv_es = nav_es.get("tts_script_conversational") or nav_es.get("tts_script") or ""
+  assert 120 <= len(conv_es) <= 750
 
-  # Verify TTS "Read Me the Report" synthesis via gemini-3.8-flash-tts
+  # Verify TTS "Read Me the Report" synthesis via gemini-3.8-flash-tts (both EN and ES)
   tts_res = eng.synthesize_report_speech(
-      text="Executive summary test for Gemini Enterprise Smart Reports.",
+      text=conv_en,
       voice_name="Kore",
   )
   assert tts_res.get("status") == "OK" and len(tts_res.get("audio_base64", "")) > 1000
@@ -157,12 +199,12 @@ def verify_live_engine() -> None:
   assert "***" not in ad_unmasked["q1_active_users"]["active_users"][0]["display_principal"]
 
   print(
-      f"VERIFIED OK (v3.4.0): {len(proj_ids)} selectable GCP projects ({', '.join(proj_ids[:3])}), "
+      f"VERIFIED OK (v3.5.0): {len(proj_ids)} selectable GCP projects ({', '.join(proj_ids[:3])}), "
       f"{rep['kpis']['total_engines']} engines, "
       f"{rep['kpis']['total_agents']} agents (Lineage: {lin['counts']['agents']} agents / {len(lin['nodes'])} total nodes), "
-      f"{rep['kpis']['total_datastores']} data stores, "
+      f"{rep['kpis']['total_datastores']} data stores ({idx_cap['total_indexed_fmt']} indexed, {len(idx_alerts)} active >=80% alerts), "
+      f"Conversational TTS ({len(conv_en.split())} words / {len(conv_en)} chars), "
       f"{mb['billing_info']['total_live_tokens']:,} live Cloud Monitoring tokens across {len(mb['by_model'])} models, "
-      f"EN+ES i18n, Light/Dark Mode, 4-Color Google Palette, Dimension 1..6, "
       f"${rep['kpis']['total_spend_usd']} total spend."
   )
 

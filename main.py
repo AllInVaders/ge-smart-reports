@@ -28,9 +28,9 @@ if HAS_FASTAPI:
       title="Gemini Enterprise Smart Reports",
       description=(
           "Open-source, 100% live Discovery Engine API, Cloud Monitoring Token Billing,"
-          " Natural Language Executive Summary (gemini-3.8-flash), TTS (gemini-3.8-flash-tts) & Lineage Reporting Dashboard."
+          " Indexing Capacity & 80% Alerts, Conversational TTS (gemini-3.8-flash-tts) & Lineage Reporting Dashboard."
       ),
-      version="3.4.0",
+      version="3.5.0",
   )
   app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -43,7 +43,7 @@ if HAS_FASTAPI:
     return JSONResponse({
         "status": "ok",
         "project_id": engine.project_id,
-        "version": "3.4.0",
+        "version": "3.5.0",
     })
 
   @app.get("/api/projects")
@@ -125,6 +125,12 @@ if HAS_FASTAPI:
     updated = engine.update_config(payload)
     return JSONResponse({"status": "UPDATED", "config": updated})
 
+  @app.post("/api/indexing/alerts")
+  async def api_indexing_alerts(req: Request) -> JSONResponse:
+    payload: dict[str, Any] = await req.json()
+    res = engine.configure_indexing_alerts(payload)
+    return JSONResponse(res)
+
 
 class _StdlibHandler(SimpleHTTPRequestHandler):
   """Zero-dependency HTTP handler fallback for local execution without FastAPI."""
@@ -144,7 +150,7 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
 
     if path == "/api/health":
       self._send_json(
-          {"status": "ok", "project_id": engine.project_id, "version": "3.4.0"}
+          {"status": "ok", "project_id": engine.project_id, "version": "3.5.0"}
       )
       return
     if path == "/api/projects":
@@ -224,6 +230,10 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
     if parsed.path == "/api/config":
       updated = engine.update_config(payload)
       self._send_json({"status": "UPDATED", "config": updated})
+      return
+    if parsed.path == "/api/indexing/alerts":
+      res = engine.configure_indexing_alerts(payload)
+      self._send_json(res)
       return
     if parsed.path == "/api/narrative":
       eid = str(payload.get("engine_id") or "ALL")

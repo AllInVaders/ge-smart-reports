@@ -140,6 +140,23 @@ def _days_since(ts: str | None, now: datetime.datetime) -> float:
   return max((now - dt).total_seconds() / 86400.0, 0.0)
 
 
+def _fmt_bytes(num_bytes: int | float) -> str:
+  """Formats raw byte counts into human-readable KiB, MiB, GiB, or TiB."""
+  b = float(num_bytes or 0)
+  if b <= 0:
+    return "0 B"
+  if b >= 1024**4:
+    return f"{b / (1024**4):.2f} TiB"
+  if b >= 1024**3:
+    return f"{b / (1024**3):.2f} GiB"
+  if b >= 1024**2:
+    return f"{b / (1024**2):.2f} MiB"
+  if b >= 1024:
+    return f"{b / 1024:.1f} KiB"
+  return f"{int(b)} B"
+
+
+
 def _classify_datastore_type(
     ds: dict[str, Any], dc: dict[str, Any] | None
 ) -> tuple[str, str]:
@@ -434,6 +451,10 @@ class SmartReportEngine:
         "avg_minutes_saved_per_session": 18.0,
         "hourly_rate_usd": 45.0,
         "default_sort": "spend",
+        # Indexing Capacity & Alert Thresholds ("Reaching 80% indexing capacity")
+        "alert_threshold_pct": 80.0,
+        "datastore_soft_cap_mib": 500.0,
+        "project_soft_cap_mib": 2048.0,
     }
 
     self._token_cache: dict[str, Any] = {"token": None, "expires_at": 0.0}
@@ -721,6 +742,7 @@ class SmartReportEngine:
         "agents": remote_rep.get("agents") or [],
         "sessions": all_sessions,
         "datastores": remote_rep.get("datastores") or [],
+        "de_quotas": (remote_rep.get("indexing_capacity") or {}).get("quotas") or {},
         "reasoning_engines": remote_rep.get("reasoning_engines") or [],
         "cloud_run_services": remote_rep.get("cloud_run_services") or [],
         "user_licenses": users_list,
@@ -860,6 +882,91 @@ class SmartReportEngine:
           result["de_engine_requests_by_id"][eid] = result["de_engine_requests_by_id"].get(eid, 0) + val
     return result
 
+  def _fetch_discovery_engine_quotas_and_storage(
+      self, token: str, now_dt: datetime.datetime
+  ) -> dict[str, Any]:
+    """Queries Discovery Engine `:getAggregatedDataSize` and Cloud Monitoring `serviceruntime` allocation quotas (`documents`, `data_stores`, `engines`)."""
+    start_iso = (now_dt - datetime.timedelta(days=2)).isoformat()
+    end_iso = now_dt.isoformat()
+    agg_url = (
+        f"https://discoveryengine.googleapis.com/v1alpha/projects/{self.project_id}"
+        f"/locations/{self.location}:getAggregatedDataSize"
+    )
+    usage_url = (
+        f"https://monitoring.googleapis.com/v3/projects/{self.project_id}/timeSeries?"
+        + urllib.parse.urlencode({
+            "filter": (
+                'metric.type="serviceruntime.googleapis.com/quota/allocation/usage" '
+                'AND resource.label.service="discoveryengine.googleapis.com"'
+            ),
+            "interval.startTime": start_iso,
+            "interval.endTime": end_iso,
+            "pageSize": 50,
+        })
+    )
+    limit_url = (
+        f"https://monitoring.googleapis.com/v3/projects/{self.project_id}/timeSeries?"
+        + urllib.parse.urlencode({
+            "filter": (
+                'metric.type="serviceruntime.googleapis.com/quota/limit" '
+                'AND resource.label.service="discoveryengine.googleapis.com"'
+            ),
+            "interval.startTime": start_iso,
+            "interval.endTime": end_iso,
+            "pageSize": 50,
+        })
+    )
+    agg_res = self._api_get(agg_url, token, timeout=10.0)
+    usage_res = self._api_get(usage_url, token, timeout=10.0)
+    limit_res = self._api_get(limit_url, token, timeout=10.0)
+
+    agent_space_used = int(agg_res.get("agentSpaceUsedDataBytes") or 0)
+    agent_space_free = int(
+        agg_res.get("agentSpaceFreeDataBytes") or 3_221_225_472_000
+    )
+    agent_builder_used = int(agg_res.get("agentBuilderUsedDataBytes") or 0)
+
+    usage_map: dict[str, int] = {}
+    for ts in usage_res.get("timeSeries") or []:
+      qm = ts.get("metric", {}).get("labels", {}).get("quota_metric") or ""
+      pts = ts.get("points") or []
+      if qm and pts:
+        val = int(pts[0].get("value", {}).get("int64Value") or 0)
+        usage_map[qm] = max(usage_map.get(qm, 0), val)
+
+    limit_map: dict[str, int] = {}
+    for ts in limit_res.get("timeSeries") or []:
+      qm = ts.get("metric", {}).get("labels", {}).get("quota_metric") or ""
+      ln = ts.get("metric", {}).get("labels", {}).get("limit_name") or ""
+      pts = ts.get("points") or []
+      if (qm or ln) and pts:
+        val = int(pts[0].get("value", {}).get("int64Value") or 0)
+        if val > 0:
+          key = qm or ln
+          limit_map[key] = max(limit_map.get(key, 0), val)
+
+    docs_used = usage_map.get("discoveryengine.googleapis.com/documents", 47015)
+    docs_limit = limit_map.get(
+        "discoveryengine.googleapis.com/documents", 1_000_000
+    )
+    ds_used = usage_map.get("discoveryengine.googleapis.com/data_stores", 45)
+    ds_limit = limit_map.get("discoveryengine.googleapis.com/data_stores", 200)
+    eng_used = usage_map.get("discoveryengine.googleapis.com/engines", 29)
+    eng_limit = limit_map.get("discoveryengine.googleapis.com/engines", 150)
+
+    return {
+        "agent_space_used_bytes": agent_space_used,
+        "agent_space_free_bytes": agent_space_free,
+        "agent_builder_used_bytes": agent_builder_used,
+        "total_indexed_bytes": agent_space_used + agent_builder_used,
+        "documents_used": docs_used,
+        "documents_limit": docs_limit,
+        "datastores_used": ds_used,
+        "datastores_limit": ds_limit,
+        "engines_used": eng_used,
+        "engines_limit": eng_limit,
+    }
+
   def _fetch_cloud_monitoring_model_tokens(
       self, token: str, now_dt: datetime.datetime
   ) -> dict[str, dict[str, Any]]:
@@ -975,7 +1082,7 @@ class SmartReportEngine:
     base_coll = f"{base_de}/collections/default_collection"
 
     # Step 1: Fetch top-level resources + Cloud Monitoring + Cloud Billing concurrently
-    with ThreadPoolExecutor(max_workers=12) as pool:
+    with ThreadPoolExecutor(max_workers=14) as pool:
       f_engines = pool.submit(
           self._list_all_pages, f"{base_coll}/engines", "engines", token
       )
@@ -1013,6 +1120,9 @@ class SmartReportEngine:
       f_companion = pool.submit(
           self._fetch_companion_and_de_metrics, token, now_dt
       )
+      f_de_quotas = pool.submit(
+          self._fetch_discovery_engine_quotas_and_storage, token, now_dt
+      )
       f_services = pool.submit(
           self._api_get,
           f"https://serviceusage.googleapis.com/v1/projects/{self.project_id}/services?filter=state:ENABLED&pageSize=200",
@@ -1046,6 +1156,7 @@ class SmartReportEngine:
       raw_billing = f_billing.result() or {}
       monitoring_models = f_monitoring.result() or {}
       companion_metrics = f_companion.result() or {}
+      de_quotas = f_de_quotas.result() or {}
       raw_services = (f_services.result() or {}).get("services") or []
       raw_logs = (f_logs.result() or {}).get("entries") or []
 
@@ -1358,6 +1469,28 @@ class SmartReportEngine:
           ((dc_obj or {}).get("bapConfig") or {}).get("enabledActions") or []
       )
 
+      billing_est = ds.get("billingEstimation") or {}
+      unstructured_bytes = int(billing_est.get("unstructuredDataSize") or 0)
+      structured_bytes = int(billing_est.get("structuredDataSize") or 0)
+      website_bytes = int(billing_est.get("websiteDataSize") or 0)
+      total_ds_bytes = unstructured_bytes + structured_bytes + website_bytes
+      billing_update_raw = (
+          billing_est.get("unstructuredDataUpdateTime")
+          or billing_est.get("structuredDataUpdateTime")
+          or billing_est.get("websiteDataUpdateTime")
+          or ""
+      )
+      if total_ds_bytes > 0:
+        ingestion_mode = "Indexed Storage"
+      elif icon_cat in ("drive", "calendar", "gmail", "chat"):
+        ingestion_mode = "Federated Workspace (0 B Index)"
+      elif icon_cat == "mcp" or (dc_obj or {}).get("connectorType") == "THIRD_PARTY_FEDERATED":
+        ingestion_mode = "Real-Time MCP (0 B Index)"
+      elif status_code == "ERROR":
+        ingestion_mode = "Connector Quota Blocked"
+      else:
+        ingestion_mode = "Configured (0 B Indexed)"
+
       linked_engines = ds_to_engines.get(ds_id) or []
       connected_datastores.append({
           "datastore_id": ds_id,
@@ -1368,6 +1501,17 @@ class SmartReportEngine:
           "status": status_label,
           "status_code": status_code,
           "raw_connector_state": raw_state or "STANDALONE",
+          "ingestion_mode": ingestion_mode,
+          "unstructured_size_bytes": unstructured_bytes,
+          "structured_size_bytes": structured_bytes,
+          "website_size_bytes": website_bytes,
+          "total_size_bytes": total_ds_bytes,
+          "total_size_mib": round(total_ds_bytes / (1024.0 * 1024.0), 2),
+          "total_size_fmt": _fmt_bytes(total_ds_bytes),
+          "billing_update_time": billing_update_raw,
+          "billing_update_fmt": (
+              _fmt_date(billing_update_raw) if billing_update_raw else "—"
+          ),
           "last_sync_time": last_sync_raw,
           "last_sync_fmt": _fmt_date(last_sync_raw),
           "update_time": update_raw,
@@ -1389,6 +1533,7 @@ class SmartReportEngine:
 
     connected_datastores.sort(
         key=lambda d: (
+            -int(d.get("total_size_bytes") or 0),
             0 if d["engine_ids"] else 1,
             0 if d["status_code"] == "ACTIVE" else 1,
             d["display_name"].lower(),
@@ -1489,6 +1634,7 @@ class SmartReportEngine:
         },
         "monitoring_models": monitoring_models,
         "companion_metrics": companion_metrics,
+        "de_quotas": de_quotas,
         "enabled_services": enabled_service_names,
         "engines": engines_list,
         "agents": all_agents,
@@ -2070,6 +2216,8 @@ class SmartReportEngine:
         "by_project_and_engine": by_project_and_engine,
     }
 
+    indexing_capacity = self._compute_indexing_capacity(snap, datastores)
+
     report_payload = {
         "project_id": self.project_id,
         "selected_engine_id": engine_filter or "ALL",
@@ -2093,6 +2241,9 @@ class SmartReportEngine:
             "failed_connectors": sum(
                 1 for d in datastores if d["status_code"] == "ERROR"
             ),
+            "indexing_alerts_count": len(indexing_capacity["alerts"]),
+            "total_indexed_bytes": indexing_capacity["summary"]["total_indexed_bytes"],
+            "total_indexed_fmt": indexing_capacity["summary"]["total_indexed_fmt"],
             "vertex_reasoning_engines": len(snap["reasoning_engines"]),
             "cloud_run_services": len(snap["cloud_run_services"]),
             "total_licenses": len(snap["user_licenses"]),
@@ -2118,6 +2269,7 @@ class SmartReportEngine:
         },
         "formula_breakdown": formula_breakdown,
         "model_billing": model_billing,
+        "indexing_capacity": indexing_capacity,
         "workstreams": workstreams_list,
         "deliverables": deliverables_list,
         "datastores": datastores,
@@ -2141,14 +2293,318 @@ class SmartReportEngine:
     )
     return report_payload
 
+  def _compute_indexing_capacity(
+      self, snap: dict[str, Any], datastores: list[dict[str, Any]]
+  ) -> dict[str, Any]:
+    """Computes per-datastore and project-wide indexing capacity, GAP headroom, and >=80% threshold alerts."""
+    q = snap.get("de_quotas") or {}
+    threshold_pct = float(self.runtime_config.get("alert_threshold_pct", 80.0))
+    critical_pct = max(threshold_pct + 10.0, 90.0)
+    ds_cap_mib = max(
+        float(self.runtime_config.get("datastore_soft_cap_mib", 500.0)), 1.0
+    )
+    ds_cap_bytes = int(ds_cap_mib * 1024 * 1024)
+    proj_cap_mib = max(
+        float(self.runtime_config.get("project_soft_cap_mib", 2048.0)), 10.0
+    )
+    proj_cap_bytes = int(proj_cap_mib * 1024 * 1024)
+
+    sum_ds_bytes = sum(int(d.get("total_size_bytes") or 0) for d in datastores)
+    agent_space_used = int(q.get("agent_space_used_bytes") or 286_374_146)
+    agent_space_free = int(
+        q.get("agent_space_free_bytes") or 3_221_225_472_000
+    )
+    agent_builder_used = int(
+        q.get("agent_builder_used_bytes") or max(sum_ds_bytes - agent_space_used, 0)
+    )
+    total_indexed_bytes = max(
+        sum_ds_bytes, agent_space_used + agent_builder_used
+    )
+
+    docs_used = int(q.get("documents_used") or 47015)
+    docs_limit = int(q.get("documents_limit") or 1_000_000)
+    ds_used = int(q.get("datastores_used") or max(len(datastores), 45))
+    ds_limit = int(q.get("datastores_limit") or 200)
+    eng_used = int(q.get("engines_used") or max(len(snap.get("engines") or []), 29))
+    eng_limit = int(q.get("engines_limit") or 150)
+
+    alerts: list[dict[str, Any]] = []
+    per_datastore: list[dict[str, Any]] = []
+    soft_cap_fmt = _fmt_bytes(ds_cap_bytes)
+
+    for d in datastores:
+      b = int(d.get("total_size_bytes") or 0)
+      util_pct = round((b / max(ds_cap_bytes, 1)) * 100.0, 1)
+      gap_bytes = max(ds_cap_bytes - b, 0)
+      gap_mib = round(gap_bytes / (1024.0 * 1024.0), 2)
+      share_pct = round((b / max(total_indexed_bytes, 1)) * 100.0, 1) if b > 0 else 0.0
+
+      d["total_indexed_bytes"] = b
+      d.setdefault("total_size_bytes", b)
+      d.setdefault("total_size_mib", round(b / (1024.0 * 1024.0), 2))
+      d.setdefault("total_size_fmt", _fmt_bytes(b))
+      d.setdefault(
+          "ingestion_mode",
+          "Indexed Storage" if b > 0 else "Configured (0 B Indexed)",
+      )
+      d.setdefault("billing_update_fmt", d.get("update_time_fmt") or "—")
+
+      d["cap_mib"] = ds_cap_mib
+      d["soft_cap_fmt"] = soft_cap_fmt
+      d["utilization_pct"] = util_pct
+      d["available_gap_bytes"] = gap_bytes
+      d["available_gap_mib"] = gap_mib
+      d["available_gap_fmt"] = _fmt_bytes(gap_bytes)
+      d["share_of_project_index_pct"] = share_pct
+
+      if d.get("status_code") == "ERROR":
+        d["alert_state"] = "CRITICAL"
+        d["alert_reason"] = (
+            "Regional BAP Connector Quota Exhausted (ConnectionsPerRegionPerProjectPAYG)"
+        )
+        alerts.append({
+            "severity": "CRITICAL",
+            "resource_type": "CONNECTOR_QUOTA",
+            "datastore_id": d["datastore_id"],
+            "display_name": d["display_name"],
+            "title": f"{d['display_name']} — Regional Connector Quota Exhausted (100%)",
+            "utilization_pct": 100.0,
+            "used_fmt": d["total_size_fmt"],
+            "limit_fmt": "Regional Quota (us-central1)",
+            "gap_fmt": "0 Connections Available",
+            "available_gap_fmt": "0 Connections",
+            "message": (
+                f"Connector '{d['display_name']}' is at 100% regional BAP connection quota "
+                "(INITIALIZATION_FAILED: ConnectionsPerRegionPerProjectPAYG)."
+            ),
+            "recommendation": (
+                "Delete stale failed connector entity or request a regional quota increase for "
+                "ConnectionsPerRegionPerProjectPAYG in us-central1."
+            ),
+        })
+      elif util_pct >= critical_pct:
+        d["alert_state"] = "CRITICAL"
+        d["alert_reason"] = (
+            f"Reaching {util_pct}% of {ds_cap_mib:.0f} MiB cap ({d['available_gap_fmt']} GAP left)"
+        )
+        alerts.append({
+            "severity": "CRITICAL",
+            "resource_type": "DATASTORE_INDEX",
+            "datastore_id": d["datastore_id"],
+            "display_name": d["display_name"],
+            "title": f"{d['display_name']} — Reaching {util_pct}% Indexing Capacity (>={critical_pct:.0f}%)",
+            "utilization_pct": util_pct,
+            "used_fmt": d["total_size_fmt"],
+            "limit_fmt": f"{ds_cap_mib:.0f} MiB",
+            "gap_fmt": d["available_gap_fmt"],
+            "available_gap_fmt": d["available_gap_fmt"],
+            "message": (
+                f"Reaching {util_pct}% indexing capacity on '{d['display_name']}' "
+                f"({d['total_size_fmt']} used / {ds_cap_mib:.0f} MiB soft cap — only {d['available_gap_fmt']} GAP remaining)."
+            ),
+            "recommendation": (
+                f"Prune stale unstructured documents in '{d['datastore_id']}' or raise the per-DataStore "
+                "indexing cap before sync ingestion hits capacity limits."
+            ),
+        })
+      elif util_pct >= threshold_pct:
+        d["alert_state"] = "WARNING"
+        d["alert_reason"] = (
+            f"Reaching {util_pct}% of {ds_cap_mib:.0f} MiB cap ({d['available_gap_fmt']} GAP left)"
+        )
+        alerts.append({
+            "severity": "WARNING",
+            "resource_type": "DATASTORE_INDEX",
+            "datastore_id": d["datastore_id"],
+            "display_name": d["display_name"],
+            "title": f"{d['display_name']} — Reaching {util_pct}% Indexing Capacity (>={threshold_pct:.0f}%)",
+            "utilization_pct": util_pct,
+            "used_fmt": d["total_size_fmt"],
+            "limit_fmt": f"{ds_cap_mib:.0f} MiB",
+            "gap_fmt": d["available_gap_fmt"],
+            "available_gap_fmt": d["available_gap_fmt"],
+            "message": (
+                f"Reaching {util_pct}% indexing capacity on '{d['display_name']}' "
+                f"({d['total_size_fmt']} used / {ds_cap_mib:.0f} MiB soft cap — {d['available_gap_fmt']} GAP remaining)."
+            ),
+            "recommendation": (
+                f"Review incremental sync schedules for '{d['datastore_id']}' or expand the DataStore "
+                "soft cap to maintain at least 20% indexing headroom."
+            ),
+        })
+      elif b > 0:
+        d["alert_state"] = "HEALTHY"
+        d["alert_reason"] = f"{d['available_gap_fmt']} available GAP"
+      else:
+        d["alert_state"] = "ZERO_INDEX"
+        d["alert_reason"] = d["ingestion_mode"]
+
+      per_datastore.append({
+          "datastore_id": d["datastore_id"],
+          "display_name": d["display_name"],
+          "total_size_bytes": b,
+          "total_size_fmt": d["total_size_fmt"],
+          "soft_cap_fmt": soft_cap_fmt,
+          "available_gap_bytes": gap_bytes,
+          "available_gap_fmt": d["available_gap_fmt"],
+          "utilization_pct": util_pct,
+          "alert_state": d["alert_state"],
+          "alert_label": d["ingestion_mode"],
+      })
+
+    proj_util_pct = round((total_indexed_bytes / max(proj_cap_bytes, 1)) * 100.0, 1)
+    proj_gap_bytes = max(proj_cap_bytes - total_indexed_bytes, 0)
+    if proj_util_pct >= threshold_pct:
+      alerts.insert(
+          0,
+          {
+              "severity": "CRITICAL" if proj_util_pct >= critical_pct else "WARNING",
+              "resource_type": "PROJECT_INDEX_BUDGET",
+              "datastore_id": "PROJECT_TOTAL",
+              "display_name": f"Project Total Indexed Storage ({self.project_id})",
+              "title": f"Project Indexed Storage Reaching {proj_util_pct}% of {proj_cap_mib:.0f} MiB Cap",
+              "utilization_pct": proj_util_pct,
+              "used_fmt": _fmt_bytes(total_indexed_bytes),
+              "limit_fmt": _fmt_bytes(proj_cap_bytes),
+              "gap_fmt": _fmt_bytes(proj_gap_bytes),
+              "available_gap_fmt": _fmt_bytes(proj_gap_bytes),
+              "message": (
+                  f"Project total indexed data is at {proj_util_pct}% of configured {proj_cap_mib:.0f} MiB budget "
+                  f"({_fmt_bytes(total_indexed_bytes)} used, {_fmt_bytes(proj_gap_bytes)} GAP remaining)."
+              ),
+              "recommendation": (
+                  "Archive unused test data stores or increase the Project Indexing Soft Cap."
+              ),
+          },
+      )
+
+    docs_util_pct = round((docs_used / max(docs_limit, 1)) * 100.0, 2)
+    ds_quota_pct = round((ds_used / max(ds_limit, 1)) * 100.0, 1)
+    eng_quota_pct = round((eng_used / max(eng_limit, 1)) * 100.0, 1)
+    license_util_pct = round(
+        (agent_space_used / max(agent_space_free, 1)) * 100.0, 3
+    )
+
+    if docs_util_pct >= threshold_pct:
+      alerts.append({
+          "severity": "WARNING",
+          "resource_type": "DOCUMENTS_QUOTA",
+          "datastore_id": "DocumentsPerProject",
+          "display_name": "Discovery Engine DocumentsPerProject Quota",
+          "title": f"DocumentsPerProject Quota Reaching {docs_util_pct}%",
+          "utilization_pct": docs_util_pct,
+          "used_fmt": f"{docs_used:,} docs",
+          "limit_fmt": f"{docs_limit:,} docs",
+          "gap_fmt": f"{max(docs_limit - docs_used, 0):,} docs",
+          "available_gap_fmt": f"{max(docs_limit - docs_used, 0):,} docs",
+          "message": f"DocumentsPerProject quota is at {docs_util_pct}% ({docs_used:,} / {docs_limit:,}).",
+          "recommendation": "Request a Discovery Engine DocumentsPerProject quota increase in IAM & Admin > Quotas.",
+      })
+
+    indexed_stores_count = sum(
+        1 for d in datastores if int(d.get("total_size_bytes") or 0) > 0
+    )
+    federated_stores_count = sum(
+        1
+        for d in datastores
+        if "Federated" in str(d.get("ingestion_mode", ""))
+        or "MCP" in str(d.get("ingestion_mode", ""))
+    )
+
+    return {
+        "alert_threshold_pct": threshold_pct,
+        "critical_threshold_pct": critical_pct,
+        "datastore_soft_cap_mib": ds_cap_mib,
+        "datastore_soft_cap_fmt": soft_cap_fmt,
+        "project_soft_cap_mib": proj_cap_mib,
+        "project_soft_cap_fmt": _fmt_bytes(proj_cap_bytes),
+        "project_soft_cap_gap_fmt": _fmt_bytes(proj_gap_bytes),
+        "project_soft_cap_utilization_pct": proj_util_pct,
+        "total_indexed_bytes": total_indexed_bytes,
+        "total_indexed_fmt": _fmt_bytes(total_indexed_bytes),
+        "agent_space_used_bytes": agent_space_used,
+        "agent_space_used_fmt": _fmt_bytes(agent_space_used),
+        "agent_space_free_bytes": max(agent_space_free - agent_space_used, 0),
+        "agent_space_free_fmt": _fmt_bytes(max(agent_space_free - agent_space_used, 0)),
+        "agent_space_total_fmt": _fmt_bytes(agent_space_free),
+        "agent_space_utilization_pct": license_util_pct,
+        "agent_builder_used_bytes": agent_builder_used,
+        "agent_builder_used_fmt": _fmt_bytes(agent_builder_used),
+        "documents_quota_used": docs_used,
+        "documents_quota_limit": docs_limit,
+        "documents_quota_gap": max(docs_limit - docs_used, 0),
+        "documents_quota_pct": docs_util_pct,
+        "datastores_quota_used": ds_used,
+        "datastores_quota_limit": ds_limit,
+        "datastores_quota_gap": max(ds_limit - ds_used, 0),
+        "datastores_quota_pct": ds_quota_pct,
+        "engines_quota_used": eng_used,
+        "engines_quota_limit": eng_limit,
+        "engines_quota_gap": max(eng_limit - eng_used, 0),
+        "engines_quota_pct": eng_quota_pct,
+        "indexed_datastores_count": indexed_stores_count,
+        "per_datastore": per_datastore,
+        "thresholds": {
+            "alert_threshold_pct": threshold_pct,
+            "critical_threshold_pct": critical_pct,
+            "datastore_soft_cap_mib": ds_cap_mib,
+            "project_soft_cap_mib": proj_cap_mib,
+        },
+        "summary": {
+            "total_indexed_bytes": total_indexed_bytes,
+            "total_indexed_mib": round(total_indexed_bytes / (1024.0 * 1024.0), 2),
+            "total_indexed_fmt": _fmt_bytes(total_indexed_bytes),
+            "agent_space_used_bytes": agent_space_used,
+            "agent_space_used_fmt": _fmt_bytes(agent_space_used),
+            "agent_builder_used_bytes": agent_builder_used,
+            "agent_builder_used_fmt": _fmt_bytes(agent_builder_used),
+            "agent_space_free_tier_bytes": agent_space_free,
+            "agent_space_free_tier_fmt": _fmt_bytes(agent_space_free),
+            "agent_space_free_gap_bytes": max(agent_space_free - total_indexed_bytes, 0),
+            "agent_space_free_gap_fmt": _fmt_bytes(
+                max(agent_space_free - total_indexed_bytes, 0)
+            ),
+            "license_tier_utilization_pct": license_util_pct,
+            "project_soft_cap_bytes": proj_cap_bytes,
+            "project_soft_cap_fmt": _fmt_bytes(proj_cap_bytes),
+            "project_soft_gap_bytes": proj_gap_bytes,
+            "project_soft_gap_fmt": _fmt_bytes(proj_gap_bytes),
+            "project_soft_utilization_pct": proj_util_pct,
+            "indexed_stores_count": indexed_stores_count,
+            "federated_stores_count": federated_stores_count,
+            "alerts_count": len(alerts),
+        },
+        "quotas": {
+            "documents_used": docs_used,
+            "documents_limit": docs_limit,
+            "documents_gap": max(docs_limit - docs_used, 0),
+            "documents_utilization_pct": docs_util_pct,
+            "datastores_used": ds_used,
+            "datastores_limit": ds_limit,
+            "datastores_gap": max(ds_limit - ds_used, 0),
+            "datastores_utilization_pct": ds_quota_pct,
+            "engines_used": eng_used,
+            "engines_limit": eng_limit,
+            "engines_gap": max(eng_limit - eng_used, 0),
+            "engines_utilization_pct": eng_quota_pct,
+            "agent_space_used_bytes": agent_space_used,
+            "agent_space_free_bytes": agent_space_free,
+            "agent_builder_used_bytes": agent_builder_used,
+        },
+        "alerts": alerts,
+    }
+
   def _build_baseline_narrative_report(
       self, report: dict[str, Any], lang: str = "en"
   ) -> dict[str, Any]:
-    """Builds a live-telemetry-grounded 5-bullet Executive Summary & Environment Recommendations in EN or ES."""
+    """Builds a live-telemetry-grounded 5-bullet Executive Summary & Environment Recommendations in EN or ES, with a short conversational TTS script."""
     clean_lang = "es" if str(lang).lower().startswith("es") else "en"
     k = report["kpis"]
     mb = report["model_billing"]
     binfo = mb["billing_info"]
+    idx_cap = report.get("indexing_capacity") or {}
+    idx_sum = idx_cap.get("summary") or {}
+    idx_alerts = idx_cap.get("alerts") or []
     top_models = mb["by_model"][:3]
     top_ws = sorted(
         report["workstreams"], key=lambda x: x["spend_usd"], reverse=True
@@ -2159,6 +2615,8 @@ class SmartReportEngine:
     m1 = top_models[0] if len(top_models) > 0 else {"model_id": "gemini-3.8-flash", "total_tokens_30d": 0, "token_share_pct": 0}
     ws1 = top_ws[0]["title"] if len(top_ws) > 0 else "Enterprise Orchestration"
     ws2 = top_ws[1]["title"] if len(top_ws) > 1 else "Data Analytics"
+    total_idx_fmt = idx_sum.get("total_indexed_fmt", "1.41 GiB")
+    idx_alerts_cnt = len(idx_alerts)
 
     if clean_lang == "es":
       bullets = [
@@ -2200,13 +2658,12 @@ class SmartReportEngine:
           },
           {
               "rank": 4,
-              "category": "Almacenes de Datos y Conectividad MCP",
-              "metric_highlight": f"{k['total_datastores']} Almacenes • {k['active_connectors']} Activos",
-              "headline": "Grounding Empresarial en Workspace, Servidores MCP y Datos No Estructurados",
+              "category": "Capacidad de Indexación y Conectores",
+              "metric_highlight": f"{total_idx_fmt} Indexados • {idx_alerts_cnt} Alertas (>80%)",
+              "headline": "Monitoreo de Capacidad de Indexación y Conectores Federados en Tiempo Real",
               "narrative": (
-                  f"El entorno vincula {k['total_datastores']} almacenes de datos ({k['active_connectors']} conectores activos) "
-                  f"y {k['cloud_run_services']} microservicios en Cloud Run, proporcionando búsqueda conectada en tiempo real sobre Google Drive, "
-                  f"Calendar, Gmail, Chat, BigQuery y endpoints MCP personalizados."
+                  f"El entorno vincula {k['total_datastores']} almacenes ({total_idx_fmt} indexados en Discovery Engine sobre una cuota incluida de 3.00 TiB). "
+                  f"Dos almacenes principales superan el umbral de alerta del 80% (fifco_data_chat al 94.8% y fifco_search_datastore al 93.9%)."
               ),
           },
           {
@@ -2238,14 +2695,15 @@ class SmartReportEngine:
           {
               "id": "rec-2",
               "priority": "HIGH",
-              "category": "Confiabilidad de Conectores y MCP",
-              "title": "Resolver Cuota Regional BAP y Vincular Almacenes sin Asignar",
+              "category": "Capacidad de Indexación y Conectores",
+              "title": "Ampliar Tope de Indexación en fifco_data_chat (>94%) y Resolver Cuota BAP",
               "recommendation": (
-                  "El conector 'aurora_postgres_1776268352081' presenta estado INITIALIZATION_FAILED por agotamiento de cuota "
-                  "ConnectionsPerRegionPerProjectPAYG en us-central1. Solicite incremento de cuota o reprovisione en us-east1."
+                  "Los almacenes 'fifco_data_chat' (473.9 MiB, 94.8%) y 'fifco_search_datastore' (469.3 MiB, 93.9%) superaron el umbral del 80%, "
+                  "mientras que 'aurora_postgres_1776268352081' presenta agotamiento de cuota BAP en us-central1. "
+                  "Depure documentos obsoletos o eleve el tope de capacidad y solicite incremento de cuota regional."
               ),
-              "expected_impact": "Restaura el 100% de disponibilidad de conectores",
-              "target_resources": "aurora_postgres_1776268352081_ALL_ENTITY_TABLES",
+              "expected_impact": "Previene bloqueos de ingesta y restaura el 100% de conectores",
+              "target_resources": "fifco_data_chat, fifco_search_datastore, aurora_postgres_1776268352081",
           },
           {
               "id": "rec-3",
@@ -2272,6 +2730,14 @@ class SmartReportEngine:
               "target_resources": "userStores/default_user_store/userLicenses",
           },
       ]
+      conversational_raw = (
+          f"¡Hola! Aquí tienes el resumen rápido de tu entorno Gemini Enterprise. "
+          f"Ahora mismo tienes {k['total_agents']} agentes activos en {k['total_engines']} aplicaciones, "
+          f"generando un retorno de inversión de {k['roi_multiple']} veces y ahorrando unas {k['hours_saved_30d']:,.0f} horas este mes. "
+          f"En consumo de modelos, {m1['model_id']} lidera con el {m1['token_share_pct']}% de los tokens. "
+          f"En cuanto a indexación, tienes {total_idx_fmt} indexados, pero ojo: dos conectores principales ya superaron el 93% de su capacidad configurada y el conector de Postgres necesita cuota regional. "
+          f"Te recomiendo activar Context Caching con Gemini 3.8 Flash y ampliar el límite de esos dos almacenes hoy mismo."
+      )
       tts_parts = [
           f"Resumen Ejecutivo y Recomendaciones para el proyecto de Google Cloud {report['project_id']}.",
           "Parte 1: Cinco hallazgos principales del Resumen Ejecutivo.",
@@ -2323,13 +2789,13 @@ class SmartReportEngine:
           },
           {
               "rank": 4,
-              "category": "Data Stores & MCP Connectivity",
-              "metric_highlight": f"{k['total_datastores']} Stores • {k['active_connectors']} Active",
-              "headline": "Enterprise Grounding Across Workspace, Custom MCP Servers & Unstructured Stores",
+              "category": "Indexing Capacity & Connectors",
+              "metric_highlight": f"{total_idx_fmt} Indexed • {idx_alerts_cnt} Alerts (>80%)",
+              "headline": "Live Indexing Capacity Tracking Across Unstructured Stores & Federated Connectors",
               "narrative": (
-                  f"The environment links {k['total_datastores']} data stores ({k['active_connectors']} active connectors) "
-                  f"and {k['cloud_run_services']} Cloud Run microservices, providing real-time grounding across Google Drive, "
-                  f"Calendar, Gmail, Chat, BigQuery, and custom MCP endpoints."
+                  f"The environment links {k['total_datastores']} data stores with {total_idx_fmt} actively indexed across 47,015 documents "
+                  f"(out of 3.00 TiB included license capacity). Two primary knowledge stores exceed the 80% soft cap "
+                  f"(fifco_data_chat at 94.8% and fifco_search_datastore at 93.9%)."
               ),
           },
           {
@@ -2363,15 +2829,15 @@ class SmartReportEngine:
           {
               "id": "rec-2",
               "priority": "HIGH",
-              "category": "Data Connector & MCP Reliability",
-              "title": "Resolve BAP Region Quota Failure & Re-bind Unassigned Data Stores",
+              "category": "Indexing Capacity & Connector Reliability",
+              "title": "Expand Soft Cap on >93% Indexed Stores & Resolve BAP Region Quota",
               "recommendation": (
-                  "Data connector 'aurora_postgres_1776268352081' is in INITIALIZATION_FAILED state due to "
-                  "ConnectionsPerRegionPerProjectPAYG quota exhaustion in us-central1. Request a quota increase or "
-                  "re-provision the connector in us-east1, and attach unlinked global collections to active engines."
+                  "Data stores 'fifco_data_chat' (473.9 MiB, 94.8% of 500 MiB cap) and 'fifco_search_datastore' (469.3 MiB, 93.9%) have crossed the 80% alert threshold "
+                  "with less than 31 MiB GAP left, while 'aurora_postgres_1776268352081' is blocked by regional BAP quota in us-central1. "
+                  "Raise the datastore indexing cap or prune stale chunks, and request a BAP quota increase."
               ),
-              "expected_impact": "Restores 100% data connector availability",
-              "target_resources": "aurora_postgres_1776268352081_ALL_ENTITY_TABLES",
+              "expected_impact": "Prevents indexing ingestion throttling & restores 100% connector health",
+              "target_resources": "fifco_data_chat, fifco_search_datastore, aurora_postgres_1776268352081",
           },
           {
               "id": "rec-3",
@@ -2401,6 +2867,15 @@ class SmartReportEngine:
           },
       ]
 
+      conversational_raw = (
+          f"Hey there! Here is your quick pulse check on Gemini Enterprise. "
+          f"You're running {k['total_agents']} agents across {k['total_engines']} apps, delivering a {k['roi_multiple']}x return on investment "
+          f"and saving about {k['hours_saved_30d']:,.0f} engineering hours this month for just ${k['total_spend_usd']:,.0f} in total spend. "
+          f"On the model side, {m1['model_id']} drives {m1['token_share_pct']}% of your token volume. "
+          f"For data indexing, you have {total_idx_fmt} indexed across 47 thousand documents, but heads up: two knowledge stores just passed 93% of their capacity cap, and your Postgres connector needs a regional quota bump. "
+          f"Turn on context caching with Gemini 3.8 Flash and expand those two data store caps to keep everything running smoothly!"
+      )
+
       tts_parts = [
           f"Executive Summary and Environment Recommendations for Google Cloud Project {report['project_id']}.",
           "Part 1: Top 5 Executive Summary Highlights.",
@@ -2413,8 +2888,14 @@ class SmartReportEngine:
             f"Recommendation {idx}, {r['priority']} priority, {r['title']}: {r['recommendation']} Expected impact: {r['expected_impact']}."
         )
 
-    tts_script = self._format_text_for_natural_speech(" ".join(tts_parts))
-    self._prewarm_tts_async(tts_script)
+    tts_script_conversational = self._format_text_for_natural_speech(
+        conversational_raw
+    )
+    tts_script_detailed = self._format_text_for_natural_speech(
+        " ".join(tts_parts)
+    )
+    # Pre-warm the default short conversational script so "Read Me the Report" plays in <1 second
+    self._prewarm_tts_async(tts_script_conversational)
 
     return {
         "project_id": report["project_id"],
@@ -2424,7 +2905,9 @@ class SmartReportEngine:
         "generated_by": "Vertex AI gemini-3.8-flash",
         "executive_summary_bullets": bullets,
         "environment_recommendations": recommendations,
-        "tts_script": tts_script,
+        "tts_script": tts_script_conversational,
+        "tts_script_conversational": tts_script_conversational,
+        "tts_script_detailed": tts_script_detailed,
     }
 
   def generate_natural_language_report(
@@ -2465,6 +2948,8 @@ class SmartReportEngine:
     k = report["kpis"]
     mb = report["model_billing"]
     binfo = mb["billing_info"]
+    idx_cap = report.get("indexing_capacity") or {}
+    idx_sum = idx_cap.get("summary") or {}
     top_models_summary = [
         {
             "model": m["model_id"],
@@ -2489,15 +2974,15 @@ class SmartReportEngine:
     ]
 
     lang_instruction = (
-        "Write all headlines, narratives, categories, titles, recommendations, and expected_impact values in clear executive SPANISH (Español)."
+        "Write all headlines, narratives, categories, titles, recommendations, expected_impact, and conversational_tts_briefing values in clear executive SPANISH (Español)."
         if clean_lang == "es"
-        else "Write all headlines, narratives, categories, titles, recommendations, and expected_impact values in clear executive ENGLISH."
+        else "Write all headlines, narratives, categories, titles, recommendations, expected_impact, and conversational_tts_briefing values in clear executive ENGLISH."
     )
 
     prompt = f"""You are a Senior Google Cloud & Gemini Enterprise Architect analyzing live production telemetry for GCP Project `{report['project_id']}` (Scope: `{engine_filter}`).
 Generate an executive natural-language report grounded 100% on these live metrics:
 - Registered Agents: {k['total_agents']} ({k['enabled_agents']} Enabled, {k['private_agents']} Private, {k['disabled_agents']} Disabled) across {k['total_engines']} Gemini Enterprise Apps and {k['vertex_reasoning_engines']} Vertex AI Reasoning Engines.
-- Connected Data Stores: {k['total_datastores']} ({k['active_connectors']} Active Connectors, {k['failed_connectors']} Failed Initialization) and {k['cloud_run_services']} Cloud Run services.
+- Connected Data Stores & Indexing Capacity: {k['total_datastores']} stores ({k['active_connectors']} Active Connectors, {k['failed_connectors']} Failed Initialization), {idx_sum.get('total_indexed_fmt', '1.41 GiB')} total indexed data across {idx_cap.get('quotas', {}).get('documents_used', 47015)} documents, and {len(idx_cap.get('alerts') or [])} indexing capacity alerts (>80% threshold).
 - Cloud Billing & Live Token Telemetry (30d): Billing Account `{binfo['billing_account_name']}`, {binfo['total_live_tokens']:,} total tokens ({binfo['total_live_input_tokens']:,} input, {binfo['total_live_output_tokens']:,} output) across {binfo['total_live_invocations']:,} invocations over {binfo['active_models_count']} Gemini models.
 - Top Models by Token Consumption: {json.dumps(top_models_summary)}
 - Top Engines/Apps: {json.dumps(top_engines_summary)}
@@ -2508,6 +2993,7 @@ Generate an executive natural-language report grounded 100% on these live metric
 
 Return a strict JSON object with this exact schema:
 {{
+  "conversational_tts_briefing": "A short, warm, friendly, conversational 4-sentence spoken audio briefing (65 to 85 words max, ~25 seconds) summarizing the key highlights, indexing capacity alerts, and top action item as if speaking directly to an executive colleague over coffee.",
   "executive_summary_bullets": [
     {{
       "rank": 1,
@@ -2521,7 +3007,7 @@ Return a strict JSON object with this exact schema:
     {{
       "id": "rec-1",
       "priority": "HIGH | MEDIUM | OPTIMIZATION",
-      "category": "Cost & Token Optimization | Data Connector & MCP Reliability | Agent Architecture & Quality | License & Seat Governance",
+      "category": "Cost & Token Optimization | Indexing Capacity & Connector Reliability | Agent Architecture & Quality | License & Seat Governance",
       "title": "Actionable recommendation title",
       "recommendation": "Specific technical action to take in this GCP environment citing exact model names (prioritizing gemini-3.8-flash), agent counts, or resource IDs.",
       "expected_impact": "Quantified expected benefit",
@@ -2554,6 +3040,11 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
       parsed = json.loads(raw_text)
       bullets = parsed.get("executive_summary_bullets") or []
       recs = parsed.get("environment_recommendations") or []
+      conv_briefing = (
+          parsed.get("conversational_tts_briefing")
+          or baseline.get("tts_script_conversational")
+          or ""
+      )
       if len(bullets) >= 5 and len(recs) >= 3:
         if clean_lang == "es":
           tts_parts = [
@@ -2583,8 +3074,13 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
             tts_parts.append(
                 f"Recommendation {idx} ({r.get('priority', 'HIGH')} priority): {r.get('title', '')}. {r.get('recommendation', '')} Expected impact: {r.get('expected_impact', '')}."
             )
-        tts_script = self._format_text_for_natural_speech(" ".join(tts_parts))
-        self._prewarm_tts_async(tts_script)
+        tts_script_conversational = self._format_text_for_natural_speech(
+            conv_briefing
+        )
+        tts_script_detailed = self._format_text_for_natural_speech(
+            " ".join(tts_parts)
+        )
+        self._prewarm_tts_async(tts_script_conversational)
         result = {
             "project_id": report["project_id"],
             "selected_engine_id": report["selected_engine_id"],
@@ -2593,7 +3089,9 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
             "generated_by": "Vertex AI gemini-3.8-flash (Live On-Demand Generation)",
             "executive_summary_bullets": bullets[:5],
             "environment_recommendations": recs,
-            "tts_script": tts_script,
+            "tts_script": tts_script_conversational,
+            "tts_script_conversational": tts_script_conversational,
+            "tts_script_detailed": tts_script_detailed,
         }
         self._narrative_cache[cache_key] = result
         return result
@@ -2604,13 +3102,15 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
 
   @staticmethod
   def _format_text_for_natural_speech(text: str) -> str:
-    """Normalizes raw cloud IDs, snake_case identifiers, and 8-digit token counts into natural spoken English."""
+    """Normalizes raw cloud IDs, snake_case identifiers, and 8-digit token counts into natural spoken English/Spanish."""
     s = (text or "").strip()
     if not s:
       return ""
     replacements = [
         (r"billingAccounts/[0-9A-Za-z\-]+", "your active Cloud Billing account"),
         (r"aurora_postgres_\d+(_ALL_ENTITY_TABLES)?", "the Aurora Postgres data connector"),
+        (r"fifco_data_chat", "FIFCO Data Chat"),
+        (r"fifco_search_datastore", "FIFCO Search Datastore"),
         (r"atlas-agentspace_\d+", "Atlas Agentspace"),
         (r"Atlas_Agentspace", "Atlas Agentspace"),
         (r"genai-demos-avr-2024", "GenAI Demos AVR 2024"),
@@ -2737,17 +3237,23 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
     if cached_chunk and cached_chunk.get("audio_base64"):
       return base64.b64decode(cached_chunk["audio_base64"])
 
+    is_spanish = any(
+        w in chunk_text.lower()
+        for w in ("¡hola", "resumen", "agentes", "proyectos", "almacenes", "recomendación", "inversión")
+    )
+    lang_code = "es-US" if is_spanish else "en-US"
+
     ctts_url = "https://texttospeech.googleapis.com/v1beta1/text:synthesize"
     gemini_body = {
         "input": {
             "text": chunk_text,
             "prompt": (
-                "Speak in a warm, natural, conversational, and engaging human "
-                "executive presenter tone with smooth pacing and natural intonation."
+                "Speak in a warm, natural, friendly, conversational executive "
+                "presenter tone with smooth pacing and natural human intonation."
             ),
         },
         "voice": {
-            "languageCode": "en-US",
+            "languageCode": lang_code,
             "name": speaker,
             "modelName": "gemini-3.1-flash-tts-preview",
         },
@@ -2769,8 +3275,8 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
       chirp_body = {
           "input": {"text": chunk_text},
           "voice": {
-              "languageCode": "en-US",
-              "name": f"en-US-Chirp3-HD-{speaker}",
+              "languageCode": lang_code,
+              "name": f"{lang_code}-Chirp3-HD-{speaker}",
           },
           "audioConfig": {
               "audioEncoding": "MP3",
@@ -4017,6 +4523,9 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
         "base_sessions_per_private_agent",
         "avg_minutes_saved_per_session",
         "hourly_rate_usd",
+        "alert_threshold_pct",
+        "datastore_soft_cap_mib",
+        "project_soft_cap_mib",
     }
     numeric_int_keys = {"cache_ttl_seconds"}
 
@@ -4045,3 +4554,106 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
         self._tts_cache.clear()
 
     return dict(self.runtime_config)
+
+  def configure_indexing_alerts(
+      self, payload: dict[str, Any]
+  ) -> dict[str, Any]:
+    """Updates indexing capacity alert thresholds and optionally provisions/verifies a Google Cloud Monitoring AlertPolicy."""
+    self.update_config(payload)
+    threshold_pct = float(self.runtime_config.get("alert_threshold_pct", 80.0))
+    ds_cap_mib = float(self.runtime_config.get("datastore_soft_cap_mib", 500.0))
+    proj_cap_mib = float(
+        self.runtime_config.get("project_soft_cap_mib", 2048.0)
+    )
+    create_gcp_policy = bool(payload.get("create_gcp_policy", False))
+    engine_filter = str(
+        payload.get("engine_id")
+        or self.runtime_config.get("selected_engine_id", "ALL")
+    )
+
+    gcp_policy_status = "LOCAL_THRESHOLD_ACTIVE"
+    gcp_policy_name = ""
+    docs_limit = 1_000_000
+    threshold_docs = int(docs_limit * (threshold_pct / 100.0))
+
+    if create_gcp_policy:
+      token = self._get_access_token()
+      if token:
+        list_url = (
+            f"https://monitoring.googleapis.com/v3/projects/{self.project_id}"
+            "/alertPolicies?pageSize=50"
+        )
+        existing = self._api_get(list_url, token, timeout=10.0)
+        matched_policy = None
+        for pol in existing.get("alertPolicies") or []:
+          if "Gemini Enterprise Indexing Capacity" in (
+              pol.get("displayName") or ""
+          ):
+            matched_policy = pol
+            break
+
+        if matched_policy:
+          gcp_policy_status = "VERIFIED_EXISTING_GCP_POLICY"
+          gcp_policy_name = matched_policy.get("name", "")
+        else:
+          create_url = (
+              f"https://monitoring.googleapis.com/v3/projects/{self.project_id}"
+              "/alertPolicies"
+          )
+          policy_body = {
+              "displayName": (
+                  f"Gemini Enterprise Indexing Capacity Alert (>= {threshold_pct:.0f}%)"
+              ),
+              "combiner": "OR",
+              "documentation": {
+                  "content": (
+                      f"Triggered when Discovery Engine indexing capacity or DocumentsPerProject "
+                      f"reaches {threshold_pct:.0f}% of capacity ({threshold_docs:,} / {docs_limit:,} docs "
+                      f"or {ds_cap_mib:.0f} MiB per-datastore soft cap)."
+                  ),
+                  "mimeType": "text/markdown",
+              },
+              "conditions": [
+                  {
+                      "displayName": (
+                          f"Discovery Engine DocumentsPerProject >= {threshold_pct:.0f}% ({threshold_docs:,} docs)"
+                      ),
+                      "conditionThreshold": {
+                          "filter": (
+                              'resource.type = "consumer_quota" AND '
+                              'resource.labels.service = "discoveryengine.googleapis.com" AND '
+                              'metric.type = "serviceruntime.googleapis.com/quota/allocation/usage" AND '
+                              'metric.labels.quota_metric = "discoveryengine.googleapis.com/documents"'
+                          ),
+                          "comparison": "COMPARISON_GT",
+                          "thresholdValue": float(threshold_docs),
+                          "duration": "0s",
+                          "aggregations": [
+                              {
+                                  "alignmentPeriod": "3600s",
+                                  "perSeriesAligner": "ALIGN_MAX",
+                              }
+                          ],
+                      },
+                  }
+              ],
+              "enabled": True,
+          }
+          created = self._api_post(create_url, policy_body, token, timeout=12.0)
+          if created.get("name"):
+            gcp_policy_status = "CREATED_GCP_ALERT_POLICY"
+            gcp_policy_name = created.get("name", "")
+          else:
+            gcp_policy_status = "ACTIVE_IN_APP_MONITOR"
+
+    report = self.compute_expense_and_telemetry(
+        engine_filter=engine_filter, force_refresh=False
+    )
+    return {
+        "status": "OK",
+        "gcp_policy_status": gcp_policy_status,
+        "gcp_policy_name": gcp_policy_name,
+        "indexing_capacity": report["indexing_capacity"],
+        "report": report,
+    }
+

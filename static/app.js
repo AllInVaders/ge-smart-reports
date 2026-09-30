@@ -34,6 +34,7 @@ const state = {
   ttsPlaying: false,
   ttsPaused: false,
   ttsMode: null,
+  ttsBriefingMode: 'CONVERSATIONAL',
   ttsAudioCache: {},
   ttsSessionId: 0,
   audioUnlocked: false,
@@ -121,7 +122,11 @@ const I18N_CATALOG = {
     tts_pause_btn: 'Pause Reading',
     tts_resume_btn: 'Resume Reading',
     tts_stop_btn: '⏹ Stop',
-    tts_ready_status: 'Audio Briefing Ready — gemini-3.8-flash-tts (Executive Summary + Recommendations)',
+    tts_mode_conv: '💬 Short Conversational (~30s)',
+    tts_mode_full: '📄 Full Report (~90s)',
+    tts_script_badge_conv: '💬 CONVERSATIONAL BRIEFING SCRIPT',
+    tts_script_badge_full: '📄 FULL EXECUTIVE REPORT SCRIPT',
+    tts_ready_status: 'Conversational Audio Briefing Ready — gemini-3.8-flash-tts (~30s)',
     tts_voice_label: 'Voice Model',
     tts_speed_label: 'Speed',
     narrative_col_a_title: 'Executive Summary — 5 Most Important Insights',
@@ -188,17 +193,34 @@ const I18N_CATALOG = {
     inspector_telemetry_label: 'Live Telemetry',
     inspector_path_label: 'Resource Path',
     inspector_edges_label: 'Connected Lineage Edges',
-    datastores_title: 'Connected Data Stores & MCP Connectors',
-    datastores_sub: 'Live from collections/default_collection/dataStores & collections/{id}/dataConnector',
+    datastores_title: 'Connected Data Stores, Indexing Capacity & 80% Alert Monitor',
+    datastores_sub: 'Live from Discovery Engine :getAggregatedDataSize, dataStores.billingEstimation, serviceruntime quotas & dataConnector',
     filter_all: 'All',
     filter_active: 'Active',
+    filter_indexed: 'Indexed (>0 B)',
+    filter_alerts: '≥80% Alert',
     filter_mcp: 'Custom MCP',
     filter_errors: 'Errors',
     ds_search_placeholder: 'Filter data stores by name or type...',
+    idx_alerts_banner_title: 'Reaching 80% Indexing Capacity — Active Data Store & Connector Alerts',
+    idx_card_1_label: 'Project Indexed Data vs. Soft Budget',
+    idx_card_2_label: 'Included License Tier (AgentSpace Free)',
+    idx_card_3_label: 'DocumentsPerProject Quota (Discovery Engine)',
+    idx_card_4_label: 'DataStoresPerProject & Engines Quota',
+    idx_cfg_badge: '🔔 INDEXING CAPACITY ALERT RULES',
+    idx_cfg_threshold_label: 'Alert Threshold (%)',
+    idx_cfg_ds_cap_label: 'Per-Connector Soft Cap (MiB)',
+    idx_cfg_proj_cap_label: 'Project Budget Cap (MiB)',
+    idx_apply_btn: 'Apply Thresholds',
+    idx_sync_gcp_btn: '🔔 Sync GCP Cloud Monitoring Alert (≥80%)',
     th_ds_name: 'Name',
     th_ds_type: 'Type',
-    th_ds_status: 'Status',
-    th_ds_sync: 'Last data sync',
+    th_ds_mode: 'Ingestion Mode',
+    th_ds_size: 'Indexed Size ↓',
+    th_ds_capacity: 'Capacity Bar & Available GAP',
+    th_ds_alert: 'Alert Status',
+    th_ds_status: 'Connector Status',
+    th_ds_sync: 'Last Sync / Update',
     th_ds_update: 'Last update',
     th_ds_created: 'Date created',
     th_ds_engine: 'Connected App / Engine',
@@ -420,7 +442,11 @@ const I18N_CATALOG = {
     tts_pause_btn: 'Pausar Lectura',
     tts_resume_btn: 'Reanudar Lectura',
     tts_stop_btn: '⏹ Detener',
-    tts_ready_status: 'Audio Ejecutivo Listo — gemini-3.8-flash-tts (Resumen Ejecutivo + Recomendaciones)',
+    tts_mode_conv: '💬 Breve Conversacional (~30s)',
+    tts_mode_full: '📄 Reporte Completo (~90s)',
+    tts_script_badge_conv: '💬 GUION BREVE CONVERSACIONAL',
+    tts_script_badge_full: '📄 GUION DEL REPORTE COMPLETO',
+    tts_ready_status: 'Audio Conversacional Listo — gemini-3.8-flash-tts (~30s)',
     tts_voice_label: 'Modelo de Voz',
     tts_speed_label: 'Velocidad',
     narrative_col_a_title: 'Resumen Ejecutivo — 5 Hallazgos Más Importantes',
@@ -487,17 +513,34 @@ const I18N_CATALOG = {
     inspector_telemetry_label: 'Telemetría en Vivo',
     inspector_path_label: 'Ruta del Recurso',
     inspector_edges_label: 'Conexiones de Linaje',
-    datastores_title: 'Almacenes de Datos Conectados y Conectores MCP',
-    datastores_sub: 'En vivo desde collections/default_collection/dataStores y collections/{id}/dataConnector',
+    datastores_title: 'Almacenes de Datos Conectados, Capacidad de Indexación y Alertas (≥80%)',
+    datastores_sub: 'En vivo desde Discovery Engine :getAggregatedDataSize, dataStores.billingEstimation, cuotas serviceruntime y dataConnector',
     filter_all: 'Todos',
     filter_active: 'Activos',
+    filter_indexed: 'Indexados (>0 B)',
+    filter_alerts: 'Alerta ≥80%',
     filter_mcp: 'MCP Personalizado',
     filter_errors: 'Errores',
     ds_search_placeholder: 'Filtrar almacenes por nombre o tipo...',
+    idx_alerts_banner_title: 'Alcanzando 80% de Capacidad de Indexación — Alertas Activas de Almacenes y Conectores',
+    idx_card_1_label: 'Datos Indexados del Proyecto vs. Tope Configurado',
+    idx_card_2_label: 'Cuota Incluida de Licencia (AgentSpace Free)',
+    idx_card_3_label: 'Cuota DocumentsPerProject (Discovery Engine)',
+    idx_card_4_label: 'Cuota DataStoresPerProject y Engines',
+    idx_cfg_badge: '🔔 REGLAS DE ALERTA DE CAPACIDAD DE INDEXACIÓN',
+    idx_cfg_threshold_label: 'Umbral de Alerta (%)',
+    idx_cfg_ds_cap_label: 'Tope por Conector (MiB)',
+    idx_cfg_proj_cap_label: 'Presupuesto del Proyecto (MiB)',
+    idx_apply_btn: 'Aplicar Umbrales',
+    idx_sync_gcp_btn: '🔔 Sincronizar Alerta en GCP Cloud Monitoring (≥80%)',
     th_ds_name: 'Nombre',
     th_ds_type: 'Tipo',
-    th_ds_status: 'Estado',
-    th_ds_sync: 'Última sincronización',
+    th_ds_mode: 'Modo de Ingesta',
+    th_ds_size: 'Tamaño Indexado ↓',
+    th_ds_capacity: 'Barra de Capacidad y GAP Disponible',
+    th_ds_alert: 'Estado de Alerta',
+    th_ds_status: 'Estado Conector',
+    th_ds_sync: 'Última Sincronización / Act.',
     th_ds_update: 'Última actualización',
     th_ds_created: 'Fecha de creación',
     th_ds_engine: 'App / Motor Conectado',
@@ -663,9 +706,20 @@ function isEs() {
   return state.lang === 'es';
 }
 
-function fmtNum(n) {
+function fmtNum(n, digits = undefined) {
   const locale = isEs() ? 'es-419' : 'en-US';
+  if (digits !== undefined) {
+    return Number(n || 0).toLocaleString(locale, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+  }
   return Number(n || 0).toLocaleString(locale);
+}
+
+function fmtInt(n) {
+  const locale = isEs() ? 'es-419' : 'en-US';
+  return Math.round(Number(n || 0)).toLocaleString(locale);
 }
 
 function fmtUsd(n) {
@@ -919,6 +973,27 @@ function renderKpisAndFormulaBanner(data) {
 /* ==========================================================================
    2. NATURAL LANGUAGE EXECUTIVE SUMMARY (5 BULLETS) & RECOMMENDATIONS + TTS
    ========================================================================== */
+function renderTtsScriptPreview() {
+  const scriptText = getActiveTtsScript();
+  const previewEl = document.getElementById('ttsScriptPreviewText');
+  if (previewEl) {
+    previewEl.textContent = scriptText ? `"${scriptText}"` : '';
+  }
+  const badgeEl = document.getElementById('ttsScriptBadge');
+  if (badgeEl) {
+    const wordCount = scriptText ? scriptText.trim().split(/\s+/).length : 0;
+    if (state.ttsBriefingMode === 'DETAILED') {
+      badgeEl.textContent = isEs() ?
+          `Guion Completo Detallado (~${wordCount} palabras)` :
+          `Full Detailed Briefing (~${wordCount} words)`;
+    } else {
+      badgeEl.textContent = isEs() ?
+          `Resumen Conversacional (~${wordCount} palabras)` :
+          `Conversational Executive Briefing (~${wordCount} words)`;
+    }
+  }
+}
+
 function renderNarrativeSection() {
   const nav = state.narrativeData ||
       (state.reportData && state.reportData.narrative_report);
@@ -928,6 +1003,8 @@ function renderNarrativeSection() {
   if (recProj && state.reportData) {
     recProj.textContent = state.reportData.project_id;
   }
+
+  renderTtsScriptPreview();
 
   const bulletsBox = document.getElementById('executiveBulletsList');
   if (bulletsBox) {
@@ -1023,6 +1100,12 @@ function getActiveTtsScript() {
   const nav = state.narrativeData ||
       (state.reportData && state.reportData.narrative_report);
   if (!nav) return '';
+  if (state.ttsBriefingMode === 'DETAILED') {
+    if (nav.tts_script_detailed) return nav.tts_script_detailed;
+  } else {
+    if (nav.tts_script_conversational) return nav.tts_script_conversational;
+    if (nav.tts_script) return nav.tts_script;
+  }
   if (nav.tts_script) return nav.tts_script;
   const bullets = (nav.executive_summary_bullets || [])
                       .map((b) => `Point ${b.rank}: ${b.headline}. ${b.narrative}`)
@@ -1566,16 +1649,212 @@ function renderDeliverablesChart() {
 }
 
 /* ==========================================================================
-   6. CONNECTED DATA STORES TABLE
+   6. CONNECTED DATA STORES TABLE & INDEXING CAPACITY / 80% ALERT MONITOR
    ========================================================================== */
+function renderIndexingCapacityPanel() {
+  if (!state.reportData) return;
+  const idx = state.reportData.indexing_capacity || {};
+
+  // Populate config bar inputs
+  const thInput = document.getElementById('idxThresholdPctInput');
+  const dsCapInput = document.getElementById('idxDatastoreCapMibInput');
+  const projCapInput = document.getElementById('idxProjectCapMibInput');
+  if (thInput && idx.alert_threshold_pct !== undefined) {
+    thInput.value = idx.alert_threshold_pct;
+  }
+  if (dsCapInput && idx.datastore_soft_cap_mib !== undefined) {
+    dsCapInput.value = idx.datastore_soft_cap_mib;
+  }
+  if (projCapInput && idx.project_soft_cap_mib !== undefined) {
+    projCapInput.value = idx.project_soft_cap_mib;
+  }
+
+  // Card 1: Total Project Indexed Storage vs Soft Cap
+  const elTotalUsed = document.getElementById('idxTotalUsedVal');
+  const elTotalBar = document.getElementById('idxTotalBarFill');
+  const elTotalGap = document.getElementById('idxTotalGapSub');
+  if (elTotalUsed) {
+    elTotalUsed.textContent = `${idx.total_indexed_fmt || '0 B'} / ${
+        idx.project_soft_cap_fmt || '2.00 GiB'} (${
+        fmtNum(idx.project_soft_cap_utilization_pct || 0, 1)}%)`;
+  }
+  if (elTotalBar) {
+    const pct = Math.min(idx.project_soft_cap_utilization_pct || 0, 100);
+    elTotalBar.style.width = `${pct}%`;
+    elTotalBar.style.background =
+        pct >= 90 ? '#d93025' : (pct >= (idx.alert_threshold_pct || 80) ? '#e37400' : '#1a73e8');
+  }
+  if (elTotalGap) {
+    elTotalGap.textContent = isEs() ?
+        `Disponible (GAP): ${idx.project_soft_cap_gap_fmt || '0 B'} • Agent Builder: ${idx.agent_builder_used_fmt || '0 B'}` :
+        `Available GAP: ${idx.project_soft_cap_gap_fmt || '0 B'} • Agent Builder: ${idx.agent_builder_used_fmt || '0 B'}`;
+  }
+
+  // Card 2: AgentSpace Tier Capacity
+  const elAsUsed = document.getElementById('idxAgentSpaceUsedVal');
+  const elAsBar = document.getElementById('idxAgentSpaceBarFill');
+  const elAsGap = document.getElementById('idxAgentSpaceGapSub');
+  if (elAsUsed) {
+    elAsUsed.textContent = `${idx.agent_space_used_fmt || '0 B'} (${
+        fmtNum(idx.agent_space_utilization_pct || 0, 2)}%)`;
+  }
+  if (elAsBar) {
+    elAsBar.style.width = `${Math.max(Math.min(idx.agent_space_utilization_pct || 0, 100), 2)}%`;
+  }
+  if (elAsGap) {
+    elAsGap.textContent = isEs() ?
+        `Cuota Libre (GAP): ${idx.agent_space_free_fmt || '3.00 TiB'} de ${idx.agent_space_total_fmt || '3.00 TiB'}` :
+        `Available Free Quota (GAP): ${idx.agent_space_free_fmt || '3.00 TiB'} of ${idx.agent_space_total_fmt || '3.00 TiB'}`;
+  }
+
+  // Card 3: Documents Quota
+  const elDocUsed = document.getElementById('idxDocQuotaVal');
+  const elDocBar = document.getElementById('idxDocQuotaBarFill');
+  const elDocGap = document.getElementById('idxDocQuotaGapSub');
+  if (elDocUsed) {
+    elDocUsed.textContent = `${fmtInt(idx.documents_quota_used || 0)} / ${
+        fmtInt(idx.documents_quota_limit || 1000000)} (${
+        fmtNum(idx.documents_quota_pct || 0, 2)}%)`;
+  }
+  if (elDocBar) {
+    elDocBar.style.width = `${Math.max(Math.min(idx.documents_quota_pct || 0, 100), 2)}%`;
+  }
+  if (elDocGap) {
+    elDocGap.textContent = isEs() ?
+        `GAP Disponible: ${fmtInt(idx.documents_quota_gap || 0)} documentos restantes` :
+        `Available GAP: ${fmtInt(idx.documents_quota_gap || 0)} documents remaining`;
+  }
+
+  // Card 4: DataStores & Engines Quota
+  const elDsQuota = document.getElementById('idxDsQuotaVal');
+  const elDsBar = document.getElementById('idxDsQuotaBarFill');
+  const elDsGap = document.getElementById('idxDsQuotaGapSub');
+  if (elDsQuota) {
+    elDsQuota.textContent = `${idx.datastores_quota_used || 0}/${
+        idx.datastores_quota_limit || 200} DS (${
+        fmtNum(idx.datastores_quota_pct || 0, 1)}%) • ${
+        idx.engines_quota_used || 0}/${idx.engines_quota_limit || 150} App`;
+  }
+  if (elDsBar) {
+    elDsBar.style.width = `${Math.max(Math.min(idx.datastores_quota_pct || 0, 100), 2)}%`;
+  }
+  if (elDsGap) {
+    elDsGap.textContent = isEs() ?
+        `GAP: ${idx.datastores_quota_gap || 0} DataStores libres • ${idx.indexed_datastores_count || 0} con índice activo` :
+        `GAP: ${idx.datastores_quota_gap || 0} DataStores free • ${idx.indexed_datastores_count || 0} actively indexed`;
+  }
+
+  // Alert Banner (>= threshold%)
+  const bannerEl = document.getElementById('indexingAlertsBanner');
+  if (bannerEl) {
+    const alerts = idx.alerts || [];
+    if (!alerts.length) {
+      bannerEl.classList.add('hidden');
+      bannerEl.innerHTML = '';
+    } else {
+      bannerEl.classList.remove('hidden');
+      const headerTxt = isEs() ?
+          `🚨 Alertas Activas de Capacidad de Indexación (${alerts.length} superan el umbral del ${idx.alert_threshold_pct || 80}%)` :
+          `🚨 Active Indexing Capacity Alerts (${alerts.length} reaching >= ${idx.alert_threshold_pct || 80}% indexing capacity)`;
+      const itemsHtml = alerts
+          .map((a) => {
+            const isCrit = a.severity === 'CRITICAL';
+            return `
+          <div class="indexing-alert-item ${isCrit ? 'critical' : ''}">
+            <div class="idx-alert-left">
+              <div class="idx-alert-title">${isCrit ? '🛑' : '⚠️'} ${a.title}</div>
+              <div class="idx-alert-msg">${a.message}</div>
+              <div class="idx-alert-rec">💡 <strong>${isEs() ? 'Acción Recomendada' : 'Recommended Action'}:</strong> ${a.recommendation}</div>
+            </div>
+            <div class="idx-alert-badges">
+              <span class="status-pill ${isCrit ? 'status-error' : 'status-disabled'}">${a.utilization_pct}% ${isEs() ? 'Usado' : 'Used'}</span>
+              <span class="idx-gap-pill">${isEs() ? 'GAP Libre' : 'Available GAP'}: <strong>${a.available_gap_fmt}</strong></span>
+            </div>
+          </div>
+        `;
+          })
+          .join('');
+      bannerEl.innerHTML = `
+        <div class="indexing-alerts-header">
+          <span>${headerTxt}</span>
+          <span class="gcp-api-badge">Discovery Engine BillingEstimation + Cloud Monitoring</span>
+        </div>
+        <div class="indexing-alerts-list">${itemsHtml}</div>
+      `;
+    }
+  }
+}
+
+async function applyOrSyncIndexingAlerts(createGcpPolicy = false) {
+  const thVal = Number(document.getElementById('idxThresholdPctInput')?.value || 80);
+  const dsCapVal = Number(document.getElementById('idxDatastoreCapMibInput')?.value || 500);
+  const projCapVal = Number(document.getElementById('idxProjectCapMibInput')?.value || 2048);
+  const statusEl = document.getElementById('idxPolicySyncStatus');
+  if (statusEl) {
+    statusEl.textContent = isEs() ? 'Sincronizando umbrales...' : 'Syncing thresholds...';
+  }
+  try {
+    const res = await fetch('/api/indexing/alerts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        engine_id: state.engineId,
+        alert_threshold_pct: thVal,
+        datastore_soft_cap_mib: dsCapVal,
+        project_soft_cap_mib: projCapVal,
+        create_gcp_policy: createGcpPolicy,
+      }),
+    });
+    const data = await res.json();
+    if (data.indexing_capacity && state.reportData) {
+      state.reportData.indexing_capacity = data.indexing_capacity;
+    }
+    await loadReport(false);
+    if (statusEl && data.gcp_monitoring_policy) {
+      const pol = data.gcp_monitoring_policy;
+      statusEl.textContent = `✓ ${pol.status}: ${pol.display_name || ''} (${pol.detail || ''})`;
+    }
+    showToast(
+        isEs() ?
+            `Umbral de alerta actualizado al ${thVal}% (${(data.indexing_capacity?.alerts || []).length} alertas activas)` :
+            `Updated indexing alert threshold to ${thVal}% (${(data.indexing_capacity?.alerts || []).length} active alerts)`);
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = isEs() ? 'Error al sincronizar política.' : 'Failed to sync alert policy.';
+    }
+  }
+}
+
 function renderDatastoresTable() {
   const tbody = document.getElementById('datastoresTableBody');
   if (!tbody || !state.reportData) return;
+
+  renderIndexingCapacityPanel();
+
   const allDs = state.reportData.datastores || [];
+  const idxMap = {};
+  const idxCap = state.reportData.indexing_capacity || {};
+  (idxCap.per_datastore || []).forEach((item) => {
+    idxMap[item.datastore_id] = item;
+  });
 
   document.getElementById('dsCountAll').textContent = allDs.length;
   document.getElementById('dsCountActive').textContent =
       allDs.filter((d) => d.status_code === 'ACTIVE').length;
+  const elIdxCount = document.getElementById('dsCountIndexed');
+  if (elIdxCount) {
+    elIdxCount.textContent =
+        allDs.filter((d) => (d.total_indexed_bytes || 0) > 0).length;
+  }
+  const elAlertCount = document.getElementById('dsCountAlert');
+  if (elAlertCount) {
+    elAlertCount.textContent = allDs
+        .filter((d) => {
+          const m = idxMap[d.datastore_id];
+          return m && (m.alert_state === 'CRITICAL' || m.alert_state === 'WARNING');
+        })
+        .length;
+  }
   document.getElementById('dsCountMcp').textContent =
       allDs.filter((d) => d.icon_category === 'mcp').length;
   document.getElementById('dsCountError').textContent =
@@ -1583,12 +1862,18 @@ function renderDatastoresTable() {
 
   const q = state.dsSearch.trim().toLowerCase();
   const filtered = allDs.filter((d) => {
+    const m = idxMap[d.datastore_id] || {};
     if (state.dsFilter === 'ACTIVE' && d.status_code !== 'ACTIVE') return false;
+    if (state.dsFilter === 'INDEXED' && !(d.total_indexed_bytes > 0)) return false;
+    if (state.dsFilter === 'ALERT' &&
+        !(m.alert_state === 'CRITICAL' || m.alert_state === 'WARNING')) {
+      return false;
+    }
     if (state.dsFilter === 'MCP' && d.icon_category !== 'mcp') return false;
     if (state.dsFilter === 'ERROR' && d.status_code !== 'ERROR') return false;
     if (q) {
       const hay =
-          `${d.display_name} ${d.datastore_id} ${d.type} ${d.engine_names}`
+          `${d.display_name} ${d.datastore_id} ${d.type} ${d.engine_names} ${d.ingestion_mode || ''}`
               .toLowerCase();
       if (!hay.includes(q)) return false;
     }
@@ -1597,6 +1882,15 @@ function renderDatastoresTable() {
 
   tbody.innerHTML = filtered
       .map((d) => {
+        const m = idxMap[d.datastore_id] || {
+          total_size_fmt: d.total_size_fmt || '0 B',
+          soft_cap_fmt: idxCap.datastore_soft_cap_fmt || '500.00 MiB',
+          available_gap_fmt: idxCap.datastore_soft_cap_fmt || '500.00 MiB',
+          utilization_pct: 0,
+          alert_state: 'ZERO_INDEX',
+          alert_label: d.ingestion_mode || '0 B Indexed',
+        };
+
         let statusHtml = '';
         if (d.status_code === 'ACTIVE') {
           statusHtml = `<span class="status-pill status-active">● ${isEs() ? 'Activo' : 'Active'}</span>`;
@@ -1607,6 +1901,22 @@ function renderDatastoresTable() {
         } else {
           statusHtml = `<span class="muted">-</span>`;
         }
+
+        let alertPill = '';
+        if (m.alert_state === 'CRITICAL') {
+          alertPill = `<span class="status-pill status-error">🛑 ${m.utilization_pct}% (>=90%)</span>`;
+        } else if (m.alert_state === 'WARNING') {
+          alertPill = `<span class="status-pill status-disabled">⚠️ ${m.utilization_pct}% (>=${idxCap.alert_threshold_pct || 80}%)</span>`;
+        } else if (m.alert_state === 'HEALTHY') {
+          alertPill = `<span class="status-pill status-active">✓ ${isEs() ? 'Saludable' : 'Healthy'} (${m.utilization_pct}%)</span>`;
+        } else {
+          alertPill = `<span class="muted" style="font-size:11px;">${m.alert_label || 'Federated / 0 B'}</span>`;
+        }
+
+        const barColor = m.alert_state === 'CRITICAL' ?
+            '#d93025' :
+            (m.alert_state === 'WARNING' ? '#e37400' : '#1a73e8');
+        const barWidth = Math.min(m.utilization_pct || 0, 100);
 
         return `
       <tr>
@@ -1620,11 +1930,27 @@ function renderDatastoresTable() {
             <span class="type-icon">${iconForDatastore(d.icon_category)}</span>
             ${d.type}
           </span>
+          <div class="muted" style="font-size: 10px; margin-top: 2px;">${
+            d.ingestion_mode || ''}</div>
         </td>
+        <td class="num-col">
+          <strong>${m.total_size_fmt || '0 B'}</strong>
+          <div class="muted" style="font-size: 10px;">/ ${m.soft_cap_fmt}</div>
+        </td>
+        <td>
+          <div class="ds-cap-cell">
+            <div class="ds-cap-bar-track">
+              <div class="ds-cap-bar-fill" style="width: ${barWidth}%; background: ${barColor};"></div>
+            </div>
+            <div class="ds-cap-meta">
+              <span><strong>${m.utilization_pct || 0}%</strong> ${isEs() ? 'usado' : 'used'}</span>
+              <span>GAP: <strong>${m.available_gap_fmt}</strong></span>
+            </div>
+          </div>
+        </td>
+        <td>${alertPill}</td>
         <td>${statusHtml}</td>
-        <td>${d.last_sync_fmt}</td>
-        <td>${d.update_time_fmt}</td>
-        <td>${d.create_time_fmt}</td>
+        <td>${d.last_sync_fmt || d.update_time_fmt}</td>
         <td>${d.engine_names}</td>
       </tr>
     `;
@@ -3066,6 +3392,28 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   document.getElementById('ttsStopBtn')
       ?.addEventListener('click', stopTtsPlayback);
+
+  // TTS Briefing Mode Tabs (Short Conversational ~30s vs Full Report ~90s)
+  document.querySelectorAll('#ttsModeTabs .seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#ttsModeTabs .seg-btn')
+          .forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.ttsBriefingMode =
+          btn.getAttribute('data-tts-mode') || 'CONVERSATIONAL';
+      if (state.ttsPlaying || state.ttsPaused) {
+        stopTtsPlayback();
+      }
+      renderTtsScriptPreview();
+      prefetchDefaultTtsAudio();
+    });
+  });
+
+  // Indexing Capacity & 80% Alert Threshold Controls
+  document.getElementById('applyIndexingThresholdsBtn')
+      ?.addEventListener('click', () => applyOrSyncIndexingAlerts(false));
+  document.getElementById('syncGcpAlertPolicyBtn')
+      ?.addEventListener('click', () => applyOrSyncIndexingAlerts(true));
 
   // Token Billing tabs & search
   document.querySelectorAll('#tokenBillingTabs .seg-btn').forEach((btn) => {

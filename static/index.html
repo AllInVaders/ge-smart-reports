@@ -302,38 +302,48 @@
 
       <!-- Interactive TTS Audio Bar ("Read Me the Report" — gemini-3.8-flash-tts) -->
       <div class="tts-player-bar" id="ttsPlayerBar">
-        <div class="tts-left">
-          <button id="ttsPlayToggleBtn" class="btn btn-tts-play">
-            <span id="ttsPlayIcon">🔊</span>
-            <span id="ttsPlayLabel" data-i18n="tts_read_btn">Read Me the Report</span>
-          </button>
-          <button id="ttsStopBtn" class="btn btn-secondary btn-sm" disabled data-i18n="tts_stop_btn">⏹ Stop</button>
-          <div class="tts-status-box">
-            <div class="tts-status-title" id="ttsStatusTitle" data-i18n="tts_ready_status">Audio Briefing Ready — gemini-3.8-flash-tts (Executive Summary + Recommendations)</div>
-            <div class="tts-progress-track">
-              <div class="tts-progress-fill" id="ttsProgressFill" style="width: 0%;"></div>
+        <div class="tts-top-row">
+          <div class="tts-left">
+            <button id="ttsPlayToggleBtn" class="btn btn-tts-play">
+              <span id="ttsPlayIcon">🔊</span>
+              <span id="ttsPlayLabel" data-i18n="tts_read_btn">Read Me the Report</span>
+            </button>
+            <button id="ttsStopBtn" class="btn btn-secondary btn-sm" disabled data-i18n="tts_stop_btn">⏹ Stop</button>
+            <div class="segmented-tabs tts-mode-tabs" id="ttsModeTabs" title="Choose between a quick ~30s conversational briefing or the full 5-bullet report">
+              <button type="button" class="seg-btn active" data-tts-mode="CONVERSATIONAL" id="ttsModeConvBtn" data-i18n="tts_mode_conv">💬 Short Conversational (~30s)</button>
+              <button type="button" class="seg-btn" data-tts-mode="DETAILED" id="ttsModeFullBtn" data-i18n="tts_mode_full">📄 Full Report (~90s)</button>
+            </div>
+            <div class="tts-status-box">
+              <div class="tts-status-title" id="ttsStatusTitle" data-i18n="tts_ready_status">Conversational Audio Briefing Ready — gemini-3.8-flash-tts (~30s)</div>
+              <div class="tts-progress-track">
+                <div class="tts-progress-fill" id="ttsProgressFill" style="width: 0%;"></div>
+              </div>
             </div>
           </div>
+          <div class="tts-right">
+            <label class="tts-ctrl-label">
+              <span data-i18n="tts_voice_label">Voice Model</span>
+              <select id="ttsVoiceSelect" class="compact-select">
+                <option value="Kore" selected>gemini-3.8-flash-tts • Kore (Executive Female)</option>
+                <option value="Charon">gemini-3.8-flash-tts • Charon (Executive Male)</option>
+                <option value="Aoede">gemini-3.8-flash-tts • Aoede (Warm Narrator)</option>
+                <option value="Puck">gemini-3.8-tts • Puck (Dynamic Presenter)</option>
+                <option value="Fenrir">gemini-3.8-flash-tts • Fenrir (Deep Analyst)</option>
+              </select>
+            </label>
+            <label class="tts-ctrl-label">
+              <span data-i18n="tts_speed_label">Speed</span>
+              <select id="ttsRateSelect" class="compact-select">
+                <option value="1.0" selected>1.0x</option>
+                <option value="1.08">1.1x</option>
+                <option value="1.2">1.2x</option>
+              </select>
+            </label>
+          </div>
         </div>
-        <div class="tts-right">
-          <label class="tts-ctrl-label">
-            <span data-i18n="tts_voice_label">Voice Model</span>
-            <select id="ttsVoiceSelect" class="compact-select">
-              <option value="Kore" selected>gemini-3.8-flash-tts • Kore (Executive Female)</option>
-              <option value="Charon">gemini-3.8-flash-tts • Charon (Executive Male)</option>
-              <option value="Aoede">gemini-3.8-flash-tts • Aoede (Warm Narrator)</option>
-              <option value="Puck">gemini-3.8-flash-tts • Puck (Dynamic Presenter)</option>
-              <option value="Fenrir">gemini-3.8-flash-tts • Fenrir (Deep Analyst)</option>
-            </select>
-          </label>
-          <label class="tts-ctrl-label">
-            <span data-i18n="tts_speed_label">Speed</span>
-            <select id="ttsRateSelect" class="compact-select">
-              <option value="1.0" selected>1.0x</option>
-              <option value="1.08">1.1x</option>
-              <option value="1.2">1.2x</option>
-            </select>
-          </label>
+        <div class="tts-script-preview" id="ttsScriptPreviewBox">
+          <span class="tts-script-badge" id="ttsScriptBadge" data-i18n="tts_script_badge_conv">💬 CONVERSATIONAL BRIEFING SCRIPT</span>
+          <span class="tts-script-text" id="ttsScriptPreviewText">Loading conversational audio briefing script...</span>
         </div>
         <audio id="ttsAudioElement" class="hidden"></audio>
       </div>
@@ -606,17 +616,22 @@
       </div>
     </section>
 
-    <!-- 6. Connected Data Stores Table -->
+    <!-- 6. Connected Data Stores & Indexing Capacity Monitor -->
     <section id="section-datastores" class="card">
       <div class="card-header">
         <div>
-          <h2 data-i18n="datastores_title">Connected Data Stores &amp; MCP Connectors</h2>
-          <p class="card-sub" data-i18n="datastores_sub">Live from collections/default_collection/dataStores &amp; collections/{id}/dataConnector</p>
+          <div class="narrative-title-row">
+            <h2 data-i18n="datastores_title">Connected Data Stores, Indexing Capacity &amp; 80% Alert Monitor</h2>
+            <span id="indexingAlertCountBadge" class="status-pill status-warning">3 Indexing Alerts (&ge;80%)</span>
+          </div>
+          <p class="card-sub" data-i18n="datastores_sub">Live from Discovery Engine `:getAggregatedDataSize`, `dataStores.billingEstimation`, `serviceruntime` quotas &amp; `dataConnector`</p>
         </div>
         <div class="table-toolbar">
           <div class="segmented-tabs" id="dsFilterTabs">
             <button class="seg-btn active" data-ds-filter="ALL"><span data-i18n="filter_all">All</span> (<span id="dsCountAll">0</span>)</button>
             <button class="seg-btn" data-ds-filter="ACTIVE"><span data-i18n="filter_active">Active</span> (<span id="dsCountActive">0</span>)</button>
+            <button class="seg-btn" data-ds-filter="INDEXED"><span data-i18n="filter_indexed">Indexed (&gt;0 B)</span> (<span id="dsCountIndexed">0</span>)</button>
+            <button class="seg-btn" data-ds-filter="ALERT"><span data-i18n="filter_alerts">&ge;80% Alert</span> (<span id="dsCountAlert">0</span>)</button>
             <button class="seg-btn" data-ds-filter="MCP"><span data-i18n="filter_mcp">Custom MCP</span> (<span id="dsCountMcp">0</span>)</button>
             <button class="seg-btn" data-ds-filter="ERROR"><span data-i18n="filter_errors">Errors</span> (<span id="dsCountError">0</span>)</button>
           </div>
@@ -624,16 +639,102 @@
         </div>
       </div>
 
+      <!-- Indexing Capacity Alert Banner ("Reaching 80% indexing capacity") -->
+      <div id="indexingAlertsBanner" class="indexing-alerts-banner">
+        <div class="indexing-alerts-header">
+          <span class="indexing-alerts-icon">⚠️</span>
+          <strong id="indexingAlertsTitle" data-i18n="idx_alerts_banner_title">Reaching 80% Indexing Capacity — Active Data Store &amp; Connector Alerts</strong>
+          <span id="indexingPolicyStatusBadge" class="status-pill status-active">Live Threshold Monitor: 80%</span>
+        </div>
+        <div id="indexingAlertsList" class="indexing-alerts-list"></div>
+      </div>
+
+      <!-- 4 Live Indexing Capacity & Quota Cards with Progress Bars & Available GAP -->
+      <div class="indexing-capacity-grid" id="indexingCapacityGrid">
+        <div class="idx-cap-card">
+          <div class="idx-cap-top">
+            <span class="idx-cap-label" data-i18n="idx_card_1_label">Project Indexed Data vs. Soft Budget</span>
+            <span class="status-pill status-active" id="idxCardProjectPctBadge">70.7%</span>
+          </div>
+          <div class="idx-cap-value" id="idxCardProjectValue">1.41 GiB / 2.00 GiB</div>
+          <div class="idx-progress-track">
+            <div class="idx-progress-fill" id="idxCardProjectBar" style="width: 70.7%;"></div>
+          </div>
+          <div class="idx-cap-meta" id="idxCardProjectGap">Available GAP: 601.07 MiB remaining before budget cap</div>
+        </div>
+
+        <div class="idx-cap-card">
+          <div class="idx-cap-top">
+            <span class="idx-cap-label" data-i18n="idx_card_2_label">Included License Tier (AgentSpace Free)</span>
+            <span class="status-pill status-active" id="idxCardLicensePctBadge">0.05%</span>
+          </div>
+          <div class="idx-cap-value" id="idxCardLicenseValue">273.11 MiB / 3.00 TiB</div>
+          <div class="idx-progress-track">
+            <div class="idx-progress-fill idx-bar-green" id="idxCardLicenseBar" style="width: 2%;"></div>
+          </div>
+          <div class="idx-cap-meta" id="idxCardLicenseGap">Available GAP: 3.00 TiB included license capacity</div>
+        </div>
+
+        <div class="idx-cap-card">
+          <div class="idx-cap-top">
+            <span class="idx-cap-label" data-i18n="idx_card_3_label">DocumentsPerProject Quota (Discovery Engine)</span>
+            <span class="status-pill status-active" id="idxCardDocsPctBadge">4.70%</span>
+          </div>
+          <div class="idx-cap-value" id="idxCardDocsValue">47,015 / 1,000,000</div>
+          <div class="idx-progress-track">
+            <div class="idx-progress-fill idx-bar-blue" id="idxCardDocsBar" style="width: 4.7%;"></div>
+          </div>
+          <div class="idx-cap-meta" id="idxCardDocsGap">Available GAP: 952,985 documents remaining</div>
+        </div>
+
+        <div class="idx-cap-card">
+          <div class="idx-cap-top">
+            <span class="idx-cap-label" data-i18n="idx_card_4_label">DataStoresPerProject &amp; Engines Quota</span>
+            <span class="status-pill status-active" id="idxCardStoresPctBadge">22.5%</span>
+          </div>
+          <div class="idx-cap-value" id="idxCardStoresValue">45 / 200 Stores</div>
+          <div class="idx-progress-track">
+            <div class="idx-progress-fill idx-bar-blue" id="idxCardStoresBar" style="width: 22.5%;"></div>
+          </div>
+          <div class="idx-cap-meta" id="idxCardStoresGap">Available GAP: 155 Data Stores • 121 Engines</div>
+        </div>
+      </div>
+
+      <!-- Interactive Alert Threshold & Per-Connector Soft Cap Configuration Bar -->
+      <div class="indexing-config-bar" id="indexingConfigBar">
+        <div class="indexing-config-left">
+          <span class="formula-badge" data-i18n="idx_cfg_badge">🔔 INDEXING CAPACITY ALERT RULES</span>
+          <label class="idx-cfg-input-group">
+            <span data-i18n="idx_cfg_threshold_label">Alert Threshold (%)</span>
+            <input id="idxThresholdPctInput" type="number" min="10" max="99" step="5" value="80" class="compact-input" />
+          </label>
+          <label class="idx-cfg-input-group">
+            <span data-i18n="idx_cfg_ds_cap_label">Per-Connector Soft Cap (MiB)</span>
+            <input id="idxDatastoreCapMibInput" type="number" min="10" max="102400" step="50" value="500" class="compact-input" />
+          </label>
+          <label class="idx-cfg-input-group">
+            <span data-i18n="idx_cfg_proj_cap_label">Project Budget Cap (MiB)</span>
+            <input id="idxProjectCapMibInput" type="number" min="100" max="1048576" step="256" value="2048" class="compact-input" />
+          </label>
+        </div>
+        <div class="indexing-config-right">
+          <button type="button" id="applyIndexingThresholdsBtn" class="btn btn-secondary btn-sm" data-i18n="idx_apply_btn">Apply Thresholds</button>
+          <button type="button" id="syncGcpAlertPolicyBtn" class="btn btn-primary btn-sm" data-i18n="idx_sync_gcp_btn">🔔 Sync GCP Cloud Monitoring Alert (&ge;80%)</button>
+        </div>
+      </div>
+
       <div class="table-scroll">
-        <table class="gcp-table">
+        <table class="gcp-table" id="datastoresTable">
           <thead>
             <tr>
               <th data-i18n="th_ds_name">Name</th>
               <th data-i18n="th_ds_type">Type</th>
-              <th data-i18n="th_ds_status">Status</th>
-              <th data-i18n="th_ds_sync">Last data sync</th>
-              <th data-i18n="th_ds_update">Last update</th>
-              <th data-i18n="th_ds_created">Date created</th>
+              <th data-i18n="th_ds_mode">Ingestion Mode</th>
+              <th data-i18n="th_ds_size">Indexed Size &darr;</th>
+              <th data-i18n="th_ds_capacity">Capacity Bar &amp; Available GAP</th>
+              <th data-i18n="th_ds_alert">Alert Status</th>
+              <th data-i18n="th_ds_status">Connector Status</th>
+              <th data-i18n="th_ds_sync">Last Sync / Update</th>
               <th data-i18n="th_ds_engine">Connected App / Engine</th>
             </tr>
           </thead>

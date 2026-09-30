@@ -2357,3 +2357,267 @@ code {
   color: var(--text-secondary);
   line-height: 1.45;
 }
+
+/* ==========================================================================
+   v3.5.0: CONVERSATIONAL TTS MODE & INDEXING CAPACITY / 80% ALERT MONITOR
+   ========================================================================== */
+.tts-player-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch !important;
+  gap: 10px;
+}
+
+.tts-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+
+.tts-mode-tabs {
+  flex-shrink: 0;
+}
+
+.tts-script-preview {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-strong);
+  border-left: 3px solid var(--google-blue);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.tts-script-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--google-blue);
+  background: var(--google-blue-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tts-script-text {
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+/* Indexing Capacity Alert Banner */
+.indexing-alerts-banner {
+  background: var(--google-yellow-soft);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid #FBBC04;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.indexing-alerts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.indexing-alerts-header strong {
+  font-size: 13.5px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.indexing-alerts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.idx-alert-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid #EA4335;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.idx-alert-item.idx-alert-warning {
+  border-left-color: #FBBC04;
+}
+
+.idx-alert-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.idx-alert-name {
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.idx-alert-msg {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.idx-alert-gap {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--google-red);
+}
+
+/* 4 Live Indexing & Quota Cards */
+.indexing-capacity-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1100px) {
+  .indexing-capacity-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.idx-cap-card {
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.idx-cap-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.idx-cap-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.idx-cap-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+}
+
+.idx-progress-track {
+  width: 100%;
+  height: 7px;
+  background: var(--bg-hover);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.idx-progress-fill {
+  height: 100%;
+  background: #4285F4;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.idx-bar-green { background: #34A853; }
+.idx-bar-blue { background: #4285F4; }
+.idx-bar-yellow { background: #FBBC04; }
+.idx-bar-red { background: #EA4335; }
+
+.idx-cap-meta {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+/* Indexing Config Bar */
+.indexing-config-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.indexing-config-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.idx-cfg-input-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.compact-input {
+  width: 82px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.indexing-config-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Per-row Datastore Capacity Bar */
+.ds-cap-cell {
+  min-width: 175px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ds-cap-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+}
+
+.ds-cap-gap {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+

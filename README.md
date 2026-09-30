@@ -10,7 +10,7 @@ A lightweight **Google Cloud Run** observability and executive reporting applica
   Generates an on-demand 5-bullet Executive Summary and prioritized technical & FinOps recommendations tailored to your live GCP environment (in English or Spanish).
 
 - **"Read Me the Report" Audio Briefing (`gemini-3.8-flash-tts`)**  
-  Synthesizes the executive report into natural, expressive speech with multiple voice personas (`Kore`, `Charon`, `Aoede`, `Puck`, `Fenrir`) and playback speed controls.
+  Synthesizes the executive report into natural, expressive speech (`Kore`, `Charon`, `Aoede`, `Puck`, `Fenrir`) with a one-click toggle between a **💬 Short Conversational Briefing (`~30s`)** and a **📄 Full Detailed Report (`~90s`)** in English or Spanish.
 
 - **Workstreams & Deliverables Analytics**  
   Visualizes what teams use Gemini Enterprise for (Data Engineering, Procurement, Growth, Legal, Cloud Ops) and the deliverables produced across your agent portfolio.
@@ -21,8 +21,11 @@ A lightweight **Google Cloud Run** observability and executive reporting applica
 - **Interactive 4-Tier Lineage Graph**  
   Maps the end-to-end topology connecting **Data Stores & MCP Connectors &rarr; Gemini Enterprise Apps &rarr; Registered Agents &rarr; Vertex AI Reasoning Engines**, with multi-column matrix layout, subtype filters, search, and a node inspector.
 
-- **Data Stores, Agents & License Governance**  
-  Provides searchable live inventories of connected data stores, MCP servers, registered agents (`Low-Code`, `ADK`, `Skill`, `Workflow`, `A2A`), user seat assignments, and detected operational frictions.
+- **Connectors, Indexing Capacity & `80%` Alert Monitor**  
+  Tracks live indexed storage (`billingEstimation` & `:getAggregatedDataSize`), **Available Indexing Capacity (`GAP`)**, and Cloud Monitoring quotas (`Documents`, `DataStores`, `Engines`) across every connector, triggering visual warnings at **`>= 80%` indexing capacity** with one-click **Google Cloud Monitoring Alert Policy** sync.
+
+- **Agents & License Governance**  
+  Provides searchable live inventories of registered agents (`Low-Code`, `ADK`, `Skill`, `Workflow`, `A2A`), user seat assignments, and detected operational frictions.
 
 - **Telemetry & Adoption Tab (`6 Dimensions`)**  
   Answers the 6 core Admin adoption dimensions (`Dimension 1`–`Dimension 6`) across any custom $X$-day window (`1d` to `365d`) with a one-click privacy toggle (masked vs. full Admin view):
