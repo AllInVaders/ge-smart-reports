@@ -1,16 +1,19 @@
 # Gemini Enterprise Observability & Smart Reports
 
-A lightweight **Google Cloud Run** observability and executive reporting application for **Google Cloud Gemini Enterprise** and **Vertex AI Agent Platform** — delivering live usage telemetry, token billing, 6-dimension adoption intelligence, interactive 4-tier lineage, AI-generated executive insights, and expressive audio briefings.
+A lightweight **Google Cloud Run** observability and executive reporting application for **Google Cloud Gemini Enterprise** and **Vertex AI Agent Platform** — delivering live usage telemetry, connector & indexing capacity monitoring, token billing, 6-dimension adoption intelligence, interactive 4-tier lineage, AI-generated executive insights, and conversational audio briefings.
 
 ---
 
-## Features
+## Key Features
 
 - **Executive Summary & AI Recommendations (`gemini-3.8-flash`)**  
   Generates an on-demand 5-bullet Executive Summary and prioritized technical & FinOps recommendations tailored to your live GCP environment (in English or Spanish).
 
-- **"Read Me the Report" Audio Briefing (`gemini-3.8-flash-tts`)**  
-  Synthesizes the executive report into natural, expressive speech (`Kore`, `Charon`, `Aoede`, `Puck`, `Fenrir`) with a one-click toggle between a **💬 Short Conversational Briefing (`~30s`)** and a **📄 Full Detailed Report (`~90s`)** in English or Spanish.
+- **Conversational "Read Me the Report" Audio Briefing (`gemini-3.8-flash-tts`)**  
+  Synthesizes the report into natural, expressive speech (`Kore`, `Charon`, `Aoede`, `Puck`, `Fenrir`) with a one-click toggle between a **💬 Short Conversational Briefing (`~30s`)** and a **📄 Full Report (`~90s`)**, plus a live script preview in English or Spanish.
+
+- **Connectors, Indexing Capacity (`GAP`) & `80%` Alert Monitor**  
+  Monitors per-connector and project-wide indexed data volume, **Available Indexing Capacity (`GAP`)**, and Discovery Engine quotas (`Documents`, `Data Stores`, `Engines`, and included license storage). Automatically flags connectors reaching **`>= 80%` indexing capacity** with customizable thresholds and one-click **Google Cloud Monitoring Alert Policy** sync.
 
 - **Workstreams & Deliverables Analytics**  
   Visualizes what teams use Gemini Enterprise for (Data Engineering, Procurement, Growth, Legal, Cloud Ops) and the deliverables produced across your agent portfolio.
@@ -20,9 +23,6 @@ A lightweight **Google Cloud Run** observability and executive reporting applica
 
 - **Interactive 4-Tier Lineage Graph**  
   Maps the end-to-end topology connecting **Data Stores & MCP Connectors &rarr; Gemini Enterprise Apps &rarr; Registered Agents &rarr; Vertex AI Reasoning Engines**, with multi-column matrix layout, subtype filters, search, and a node inspector.
-
-- **Connectors, Indexing Capacity & `80%` Alert Monitor**  
-  Tracks live indexed storage (`billingEstimation` & `:getAggregatedDataSize`), **Available Indexing Capacity (`GAP`)**, and Cloud Monitoring quotas (`Documents`, `DataStores`, `Engines`) across every connector, triggering visual warnings at **`>= 80%` indexing capacity** with one-click **Google Cloud Monitoring Alert Policy** sync.
 
 - **Agents & License Governance**  
   Provides searchable live inventories of registered agents (`Low-Code`, `ADK`, `Skill`, `Workflow`, `A2A`), user seat assignments, and detected operational frictions.
