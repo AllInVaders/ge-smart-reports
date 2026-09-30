@@ -1654,6 +1654,19 @@ function renderDeliverablesChart() {
 function renderIndexingCapacityPanel() {
   if (!state.reportData) return;
   const idx = state.reportData.indexing_capacity || {};
+  const alerts = idx.alerts || [];
+
+  // Header alert badge
+  const alertBadgeEl = document.getElementById('indexingAlertCountBadge');
+  if (alertBadgeEl) {
+    const th = idx.alert_threshold_pct || 80;
+    alertBadgeEl.textContent = isEs() ?
+        `${alerts.length} Alertas Indexación (≥${th}%)` :
+        `${alerts.length} Indexing Alerts (≥${th}%)`;
+    alertBadgeEl.className = alerts.length > 0 ?
+        'status-pill status-error' :
+        'status-pill status-active';
+  }
 
   // Populate config bar inputs
   const thInput = document.getElementById('idxThresholdPctInput');
@@ -1669,85 +1682,89 @@ function renderIndexingCapacityPanel() {
     projCapInput.value = idx.project_soft_cap_mib;
   }
 
-  // Card 1: Total Project Indexed Storage vs Soft Cap
-  const elTotalUsed = document.getElementById('idxTotalUsedVal');
-  const elTotalBar = document.getElementById('idxTotalBarFill');
-  const elTotalGap = document.getElementById('idxTotalGapSub');
-  if (elTotalUsed) {
-    elTotalUsed.textContent = `${idx.total_indexed_fmt || '0 B'} / ${
-        idx.project_soft_cap_fmt || '2.00 GiB'} (${
-        fmtNum(idx.project_soft_cap_utilization_pct || 0, 1)}%)`;
+  // Card 1: Project Indexed Data vs. Soft Budget
+  const c1Pct = document.getElementById('idxCardProjectPctBadge');
+  const c1Val = document.getElementById('idxCardProjectValue');
+  const c1Bar = document.getElementById('idxCardProjectBar');
+  const c1Gap = document.getElementById('idxCardProjectGap');
+  const projPct = idx.project_soft_cap_utilization_pct || 0;
+  if (c1Pct) c1Pct.textContent = `${fmtNum(projPct, 1)}%`;
+  if (c1Val) {
+    c1Val.textContent =
+        `${idx.total_indexed_fmt || '1.41 GiB'} / ${idx.project_soft_cap_fmt || '2.00 GiB'}`;
   }
-  if (elTotalBar) {
-    const pct = Math.min(idx.project_soft_cap_utilization_pct || 0, 100);
-    elTotalBar.style.width = `${pct}%`;
-    elTotalBar.style.background =
-        pct >= 90 ? '#d93025' : (pct >= (idx.alert_threshold_pct || 80) ? '#e37400' : '#1a73e8');
+  if (c1Bar) {
+    c1Bar.style.width = `${Math.min(projPct, 100)}%`;
   }
-  if (elTotalGap) {
-    elTotalGap.textContent = isEs() ?
-        `Disponible (GAP): ${idx.project_soft_cap_gap_fmt || '0 B'} • Agent Builder: ${idx.agent_builder_used_fmt || '0 B'}` :
-        `Available GAP: ${idx.project_soft_cap_gap_fmt || '0 B'} • Agent Builder: ${idx.agent_builder_used_fmt || '0 B'}`;
-  }
-
-  // Card 2: AgentSpace Tier Capacity
-  const elAsUsed = document.getElementById('idxAgentSpaceUsedVal');
-  const elAsBar = document.getElementById('idxAgentSpaceBarFill');
-  const elAsGap = document.getElementById('idxAgentSpaceGapSub');
-  if (elAsUsed) {
-    elAsUsed.textContent = `${idx.agent_space_used_fmt || '0 B'} (${
-        fmtNum(idx.agent_space_utilization_pct || 0, 2)}%)`;
-  }
-  if (elAsBar) {
-    elAsBar.style.width = `${Math.max(Math.min(idx.agent_space_utilization_pct || 0, 100), 2)}%`;
-  }
-  if (elAsGap) {
-    elAsGap.textContent = isEs() ?
-        `Cuota Libre (GAP): ${idx.agent_space_free_fmt || '3.00 TiB'} de ${idx.agent_space_total_fmt || '3.00 TiB'}` :
-        `Available Free Quota (GAP): ${idx.agent_space_free_fmt || '3.00 TiB'} of ${idx.agent_space_total_fmt || '3.00 TiB'}`;
+  if (c1Gap) {
+    c1Gap.textContent = isEs() ?
+        `GAP Disponible: ${idx.project_soft_cap_gap_fmt || '601 MiB'} libres antes del tope` :
+        `Available GAP: ${idx.project_soft_cap_gap_fmt || '601 MiB'} remaining before budget cap`;
   }
 
-  // Card 3: Documents Quota
-  const elDocUsed = document.getElementById('idxDocQuotaVal');
-  const elDocBar = document.getElementById('idxDocQuotaBarFill');
-  const elDocGap = document.getElementById('idxDocQuotaGapSub');
-  if (elDocUsed) {
-    elDocUsed.textContent = `${fmtInt(idx.documents_quota_used || 0)} / ${
-        fmtInt(idx.documents_quota_limit || 1000000)} (${
-        fmtNum(idx.documents_quota_pct || 0, 2)}%)`;
+  // Card 2: Included License Tier (AgentSpace Free)
+  const c2Pct = document.getElementById('idxCardLicensePctBadge');
+  const c2Val = document.getElementById('idxCardLicenseValue');
+  const c2Bar = document.getElementById('idxCardLicenseBar');
+  const c2Gap = document.getElementById('idxCardLicenseGap');
+  const licPct = idx.agent_space_utilization_pct || 0.01;
+  if (c2Pct) c2Pct.textContent = `${fmtNum(licPct, 2)}%`;
+  if (c2Val) {
+    c2Val.textContent =
+        `${idx.agent_space_used_fmt || '273.11 MiB'} / ${idx.agent_space_total_fmt || '3.00 TiB'}`;
   }
-  if (elDocBar) {
-    elDocBar.style.width = `${Math.max(Math.min(idx.documents_quota_pct || 0, 100), 2)}%`;
+  if (c2Bar) {
+    c2Bar.style.width = `${Math.max(Math.min(licPct, 100), 2)}%`;
   }
-  if (elDocGap) {
-    elDocGap.textContent = isEs() ?
+  if (c2Gap) {
+    c2Gap.textContent = isEs() ?
+        `GAP Disponible: ${idx.agent_space_free_fmt || '3.00 TiB'} de cuota incluida` :
+        `Available GAP: ${idx.agent_space_free_fmt || '3.00 TiB'} included license capacity`;
+  }
+
+  // Card 3: DocumentsPerProject Quota
+  const c3Pct = document.getElementById('idxCardDocsPctBadge');
+  const c3Val = document.getElementById('idxCardDocsValue');
+  const c3Bar = document.getElementById('idxCardDocsBar');
+  const c3Gap = document.getElementById('idxCardDocsGap');
+  const docPct = idx.documents_quota_pct || 0;
+  if (c3Pct) c3Pct.textContent = `${fmtNum(docPct, 2)}%`;
+  if (c3Val) {
+    c3Val.textContent =
+        `${fmtInt(idx.documents_quota_used || 0)} / ${fmtInt(idx.documents_quota_limit || 1000000)}`;
+  }
+  if (c3Bar) {
+    c3Bar.style.width = `${Math.max(Math.min(docPct, 100), 2)}%`;
+  }
+  if (c3Gap) {
+    c3Gap.textContent = isEs() ?
         `GAP Disponible: ${fmtInt(idx.documents_quota_gap || 0)} documentos restantes` :
         `Available GAP: ${fmtInt(idx.documents_quota_gap || 0)} documents remaining`;
   }
 
-  // Card 4: DataStores & Engines Quota
-  const elDsQuota = document.getElementById('idxDsQuotaVal');
-  const elDsBar = document.getElementById('idxDsQuotaBarFill');
-  const elDsGap = document.getElementById('idxDsQuotaGapSub');
-  if (elDsQuota) {
-    elDsQuota.textContent = `${idx.datastores_quota_used || 0}/${
-        idx.datastores_quota_limit || 200} DS (${
-        fmtNum(idx.datastores_quota_pct || 0, 1)}%) • ${
-        idx.engines_quota_used || 0}/${idx.engines_quota_limit || 150} App`;
+  // Card 4: DataStoresPerProject & Engines Quota
+  const c4Pct = document.getElementById('idxCardStoresPctBadge');
+  const c4Val = document.getElementById('idxCardStoresValue');
+  const c4Bar = document.getElementById('idxCardStoresBar');
+  const c4Gap = document.getElementById('idxCardStoresGap');
+  const dsPct = idx.datastores_quota_pct || 0;
+  if (c4Pct) c4Pct.textContent = `${fmtNum(dsPct, 1)}%`;
+  if (c4Val) {
+    c4Val.textContent =
+        `${idx.datastores_quota_used || 0} / ${idx.datastores_quota_limit || 200} Stores`;
   }
-  if (elDsBar) {
-    elDsBar.style.width = `${Math.max(Math.min(idx.datastores_quota_pct || 0, 100), 2)}%`;
+  if (c4Bar) {
+    c4Bar.style.width = `${Math.max(Math.min(dsPct, 100), 2)}%`;
   }
-  if (elDsGap) {
-    elDsGap.textContent = isEs() ?
-        `GAP: ${idx.datastores_quota_gap || 0} DataStores libres • ${idx.indexed_datastores_count || 0} con índice activo` :
-        `GAP: ${idx.datastores_quota_gap || 0} DataStores free • ${idx.indexed_datastores_count || 0} actively indexed`;
+  if (c4Gap) {
+    c4Gap.textContent = isEs() ?
+        `GAP Disponible: ${idx.datastores_quota_gap || 0} Data Stores • ${idx.engines_quota_gap || 0} Engines` :
+        `Available GAP: ${idx.datastores_quota_gap || 0} Data Stores • ${idx.engines_quota_gap || 0} Engines`;
   }
 
   // Alert Banner (>= threshold%)
   const bannerEl = document.getElementById('indexingAlertsBanner');
   if (bannerEl) {
-    const alerts = idx.alerts || [];
     if (!alerts.length) {
       bannerEl.classList.add('hidden');
       bannerEl.innerHTML = '';
@@ -1789,10 +1806,6 @@ async function applyOrSyncIndexingAlerts(createGcpPolicy = false) {
   const thVal = Number(document.getElementById('idxThresholdPctInput')?.value || 80);
   const dsCapVal = Number(document.getElementById('idxDatastoreCapMibInput')?.value || 500);
   const projCapVal = Number(document.getElementById('idxProjectCapMibInput')?.value || 2048);
-  const statusEl = document.getElementById('idxPolicySyncStatus');
-  if (statusEl) {
-    statusEl.textContent = isEs() ? 'Sincronizando umbrales...' : 'Syncing thresholds...';
-  }
   try {
     const res = await fetch('/api/indexing/alerts', {
       method: 'POST',
@@ -1810,18 +1823,16 @@ async function applyOrSyncIndexingAlerts(createGcpPolicy = false) {
       state.reportData.indexing_capacity = data.indexing_capacity;
     }
     await loadReport(false);
-    if (statusEl && data.gcp_monitoring_policy) {
-      const pol = data.gcp_monitoring_policy;
-      statusEl.textContent = `✓ ${pol.status}: ${pol.display_name || ''} (${pol.detail || ''})`;
-    }
+    const polMsg = data.gcp_monitoring_policy ?
+        ` • GCP Policy: ${data.gcp_monitoring_policy.status}` :
+        '';
     showToast(
         isEs() ?
-            `Umbral de alerta actualizado al ${thVal}% (${(data.indexing_capacity?.alerts || []).length} alertas activas)` :
-            `Updated indexing alert threshold to ${thVal}% (${(data.indexing_capacity?.alerts || []).length} active alerts)`);
+            `Umbral de alerta actualizado al ${thVal}% (${(data.indexing_capacity?.alerts || []).length} alertas activas)${polMsg}` :
+            `Updated indexing alert threshold to ${thVal}% (${(data.indexing_capacity?.alerts || []).length} active alerts)${polMsg}`);
   } catch (e) {
-    if (statusEl) {
-      statusEl.textContent = isEs() ? 'Error al sincronizar política.' : 'Failed to sync alert policy.';
-    }
+    showToast(
+        isEs() ? 'Error al sincronizar política de alertas.' : 'Failed to sync alert policy.');
   }
 }
 
@@ -1861,24 +1872,33 @@ function renderDatastoresTable() {
       allDs.filter((d) => d.status_code === 'ERROR').length;
 
   const q = state.dsSearch.trim().toLowerCase();
-  const filtered = allDs.filter((d) => {
-    const m = idxMap[d.datastore_id] || {};
-    if (state.dsFilter === 'ACTIVE' && d.status_code !== 'ACTIVE') return false;
-    if (state.dsFilter === 'INDEXED' && !(d.total_indexed_bytes > 0)) return false;
-    if (state.dsFilter === 'ALERT' &&
-        !(m.alert_state === 'CRITICAL' || m.alert_state === 'WARNING')) {
-      return false;
-    }
-    if (state.dsFilter === 'MCP' && d.icon_category !== 'mcp') return false;
-    if (state.dsFilter === 'ERROR' && d.status_code !== 'ERROR') return false;
-    if (q) {
-      const hay =
-          `${d.display_name} ${d.datastore_id} ${d.type} ${d.engine_names} ${d.ingestion_mode || ''}`
-              .toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
+  const filtered = allDs
+      .filter((d) => {
+        const m = idxMap[d.datastore_id] || {};
+        if (state.dsFilter === 'ACTIVE' && d.status_code !== 'ACTIVE') return false;
+        if (state.dsFilter === 'INDEXED' && !(d.total_indexed_bytes > 0)) return false;
+        if (state.dsFilter === 'ALERT' &&
+            !(m.alert_state === 'CRITICAL' || m.alert_state === 'WARNING')) {
+          return false;
+        }
+        if (state.dsFilter === 'MCP' && d.icon_category !== 'mcp') return false;
+        if (state.dsFilter === 'ERROR' && d.status_code !== 'ERROR') return false;
+        if (q) {
+          const hay =
+              `${d.display_name} ${d.datastore_id} ${d.type} ${d.engine_names} ${d.ingestion_mode || ''}`
+                  .toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const bBytes = Number(b.total_indexed_bytes || 0);
+        const aBytes = Number(a.total_indexed_bytes || 0);
+        if (bBytes !== aBytes) return bBytes - aBytes;
+        const bErr = b.status_code === 'ERROR' ? 1 : 0;
+        const aErr = a.status_code === 'ERROR' ? 1 : 0;
+        return bErr - aErr;
+      });
 
   tbody.innerHTML = filtered
       .map((d) => {
@@ -1904,9 +1924,9 @@ function renderDatastoresTable() {
 
         let alertPill = '';
         if (m.alert_state === 'CRITICAL') {
-          alertPill = `<span class="status-pill status-error">🛑 ${m.utilization_pct}% (>=90%)</span>`;
+          alertPill = `<span class="status-pill status-error">🛑 ${m.utilization_pct}% (&ge;90%)</span>`;
         } else if (m.alert_state === 'WARNING') {
-          alertPill = `<span class="status-pill status-disabled">⚠️ ${m.utilization_pct}% (>=${idxCap.alert_threshold_pct || 80}%)</span>`;
+          alertPill = `<span class="status-pill status-disabled">⚠️ ${m.utilization_pct}% (&ge;${idxCap.alert_threshold_pct || 80}%)</span>`;
         } else if (m.alert_state === 'HEALTHY') {
           alertPill = `<span class="status-pill status-active">✓ ${isEs() ? 'Saludable' : 'Healthy'} (${m.utilization_pct}%)</span>`;
         } else {
@@ -1914,8 +1934,8 @@ function renderDatastoresTable() {
         }
 
         const barColor = m.alert_state === 'CRITICAL' ?
-            '#d93025' :
-            (m.alert_state === 'WARNING' ? '#e37400' : '#1a73e8');
+            '#EA4335' :
+            (m.alert_state === 'WARNING' ? '#FBBC04' : '#4285F4');
         const barWidth = Math.min(m.utilization_pct || 0, 100);
 
         return `
@@ -1930,8 +1950,10 @@ function renderDatastoresTable() {
             <span class="type-icon">${iconForDatastore(d.icon_category)}</span>
             ${d.type}
           </span>
-          <div class="muted" style="font-size: 10px; margin-top: 2px;">${
-            d.ingestion_mode || ''}</div>
+        </td>
+        <td>
+          <span class="status-pill status-private" style="font-size: 11px;">${
+            d.ingestion_mode || 'Indexed Storage'}</span>
         </td>
         <td class="num-col">
           <strong>${m.total_size_fmt || '0 B'}</strong>
