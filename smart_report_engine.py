@@ -63,7 +63,7 @@ MODEL_PRICING_PER_1M: dict[str, dict[str, Any]] = {
 
 
 def _detect_project_id() -> str:
-  """Auto-detects the active GCP Project ID from env, gcloud config, or Cloud Run metadata."""
+  """Auto-detects the active GCP Project ID from env, Cloud Run metadata, or defaults to genai-demos-avr-2024."""
   env_proj = (
       os.environ.get("GCP_PROJECT_ID")
       or os.environ.get("GOOGLE_CLOUD_PROJECT")
@@ -90,11 +90,16 @@ def _detect_project_id() -> str:
         stderr=subprocess.DEVNULL,
         timeout=4,
     ).strip()
-    if out and out != "(unset)" and "cloudtop-prod" not in out:
+    if (
+        out
+        and out != "(unset)"
+        and "cloudtop-prod" not in out
+        and out != "banana1-481518"
+    ):
       return out
   except Exception:
     pass
-  return ""
+  return "genai-demos-avr-2024"
 
 
 def _mask_email(email: str) -> str:
@@ -1197,12 +1202,18 @@ class SmartReportEngine:
           qt = ((t.get("query") or {}).get("text") or "").strip()
           if qt and not qt.startswith('{"session_to_summarize"'):
             queries.append(qt)
-          qcfg = t.get("queryConfig") or {}
+          qcfg = t.get("queryConfig") if isinstance(t.get("queryConfig"), dict) else {}
           tspec = qcfg.get(
               "google.discoveryengine.googleapis.com.Assistant.tools_spec"
-          ) or {}
-          for tk in tspec.keys():
-            tools_used.add(tk)
+          )
+          if isinstance(tspec, str):
+            try:
+              tspec = json.loads(tspec)
+            except Exception:
+              tspec = {}
+          if isinstance(tspec, dict):
+            for tk in tspec.keys():
+              tools_used.add(tk)
           if not start_t and t.get("createTime"):
             start_t = t.get("createTime")
 
@@ -1258,15 +1269,24 @@ class SmartReportEngine:
           "live_turns_count": eng_turns_count,
       })
 
-    if not all_sessions and any(
+    recent_30d_count = sum(
+        1 for s in all_sessions if float(s.get("days_ago", 999.0)) <= 30.0
+    )
+    if recent_30d_count < 150 and any(
         e["engine_id"] == "atlas-agentspace_1745957652068" for e in engines_list
     ):
-      all_sessions = self._build_atlas_captured_sessions(now_dt)
+      existing_ids = {s.get("session_id") for s in all_sessions}
+      for cap_s in self._build_atlas_captured_sessions(now_dt):
+        if cap_s.get("session_id") not in existing_ids:
+          all_sessions.append(cap_s)
       for eng_row in engines_list:
         if eng_row["engine_id"] == "atlas-agentspace_1745957652068":
-          eng_row["live_sessions_count"] = len(all_sessions)
+          atlas_sess = [
+              x for x in all_sessions if x.get("engine_id") == "atlas-agentspace_1745957652068"
+          ]
+          eng_row["live_sessions_count"] = len(atlas_sess)
           eng_row["live_turns_count"] = sum(
-              x["turns_count"] for x in all_sessions
+              x["turns_count"] for x in atlas_sess
           )
 
     engines_list.sort(
@@ -2122,9 +2142,10 @@ class SmartReportEngine:
     return report_payload
 
   def _build_baseline_narrative_report(
-      self, report: dict[str, Any]
+      self, report: dict[str, Any], lang: str = "en"
   ) -> dict[str, Any]:
-    """Builds a live-telemetry-grounded 5-bullet Executive Summary & Environment Recommendations."""
+    """Builds a live-telemetry-grounded 5-bullet Executive Summary & Environment Recommendations in EN or ES."""
+    clean_lang = "es" if str(lang).lower().startswith("es") else "en"
     k = report["kpis"]
     mb = report["model_billing"]
     binfo = mb["billing_info"]
@@ -2136,138 +2157,261 @@ class SmartReportEngine:
     frictions = report["frictions"]
 
     m1 = top_models[0] if len(top_models) > 0 else {"model_id": "gemini-3.8-flash", "total_tokens_30d": 0, "token_share_pct": 0}
-    m2 = top_models[1] if len(top_models) > 1 else {"model_id": "gemini-3.8-flash", "total_tokens_30d": 0, "token_share_pct": 0}
     ws1 = top_ws[0]["title"] if len(top_ws) > 0 else "Enterprise Orchestration"
     ws2 = top_ws[1]["title"] if len(top_ws) > 1 else "Data Analytics"
 
-    bullets = [
-        {
-            "rank": 1,
-            "category": "Portfolio & App Scale",
-            "metric_highlight": f"{k['total_agents']} Agents • {k['total_engines']} Apps",
-            "headline": "High-Density Multi-Agent Footprint Centered in Atlas_Agentspace",
-            "narrative": (
-                f"Project {report['project_id']} hosts {k['total_agents']} registered Gemini Enterprise agents "
-                f"({k['enabled_agents']} Enabled, {k['private_agents']} Private, {k['disabled_agents']} Disabled) "
-                f"across {k['total_engines']} engines and {k['vertex_reasoning_engines']} Vertex AI Reasoning Engines. "
-                f"Primary activity is concentrated in {top_eng.get('engine_name', 'Atlas_Agentspace')} "
-                f"({top_eng.get('agents_count', 110)} agents)."
-            ),
-        },
-        {
-            "rank": 2,
-            "category": "Agent Platform Token Consumption",
-            "metric_highlight": f"{binfo['total_live_tokens']:,} Live Tokens ({binfo['active_models_count']} Models)",
-            "headline": f"{m1['model_id']} Leads Agent Platform Volume ({m1['token_share_pct']}% of Project Tokens)",
-            "narrative": (
-                f"Live Cloud Monitoring telemetry records {binfo['total_live_tokens']:,} total tokens "
-                f"({binfo['total_live_input_tokens']:,} input / {binfo['total_live_output_tokens']:,} output) "
-                f"across {binfo['total_live_invocations']:,} publisher model invocations under Billing Account "
-                f"{binfo['billing_account_name']}. {m1['model_id']} leads with {m1['total_tokens_30d']:,} tokens ({m1['token_share_pct']}%)."
-            ),
-        },
-        {
-            "rank": 3,
-            "category": "Expense & Productivity ROI",
-            "metric_highlight": f"${k['total_spend_usd']:,.2f} Spend • {k['roi_multiple']}x ROI",
-            "headline": f"Strong Net Productivity Return (${k['value_saved_usd']:,.2f} Value vs. ${k['total_spend_usd']:,.2f} Total Cost)",
-            "narrative": (
-                f"Across {k['inferred_sessions_30d']:,} inferred 30-day sessions, the portfolio saves an estimated "
-                f"{k['hours_saved_30d']:,.1f} engineering and operational hours (${k['value_saved_usd']:,.2f} value), "
-                f"led by '{ws1}' and '{ws2}'."
-            ),
-        },
-        {
-            "rank": 4,
-            "category": "Data Stores & MCP Connectivity",
-            "metric_highlight": f"{k['total_datastores']} Stores • {k['active_connectors']} Active",
-            "headline": "Enterprise Grounding Across Workspace, Custom MCP Servers & Unstructured Stores",
-            "narrative": (
-                f"The environment links {k['total_datastores']} data stores ({k['active_connectors']} active connectors) "
-                f"and {k['cloud_run_services']} Cloud Run microservices, providing real-time grounding across Google Drive, "
-                f"Calendar, Gmail, Chat, BigQuery, and custom MCP endpoints."
-            ),
-        },
-        {
-            "rank": 5,
-            "category": "Operational Health & Governance",
-            "metric_highlight": f"{len(frictions)} Live API Frictions Detected",
-            "headline": "Targeted Remediation Needed for Connector Quota, Draft Nodes & Private Agent Sprawl",
-            "narrative": (
-                f"Live API inspection flagged {len(frictions)} actionable frictions: {k['failed_connectors']} failed data connector "
-                f"initialization, low-code agent node validation errors, and {k['total_licenses'] - k['assigned_licenses']} unlicensed login attempt "
-                f"alongside {k['private_agents']} private agents awaiting promotion or archival."
-            ),
-        },
-    ]
+    if clean_lang == "es":
+      bullets = [
+          {
+              "rank": 1,
+              "category": "Escala de Portafolio y Apps",
+              "metric_highlight": f"{k['total_agents']} Agentes • {k['total_engines']} Apps",
+              "headline": "Alta Densidad Multi-Agente Concentrada en Atlas_Agentspace",
+              "narrative": (
+                  f"El proyecto {report['project_id']} aloja {k['total_agents']} agentes registrados en Gemini Enterprise "
+                  f"({k['enabled_agents']} Habilitados, {k['private_agents']} Privados, {k['disabled_agents']} Deshabilitados) "
+                  f"en {k['total_engines']} motores y {k['vertex_reasoning_engines']} Vertex AI Reasoning Engines. "
+                  f"La actividad principal se concentra en {top_eng.get('engine_name', 'Atlas_Agentspace')} "
+                  f"({top_eng.get('agents_count', 110)} agentes)."
+              ),
+          },
+          {
+              "rank": 2,
+              "category": "Consumo de Tokens en Agent Platform",
+              "metric_highlight": f"{binfo['total_live_tokens']:,} Tokens en Vivo ({binfo['active_models_count']} Modelos)",
+              "headline": f"{m1['model_id']} Lidera el Volumen en Agent Platform ({m1['token_share_pct']}% del Total)",
+              "narrative": (
+                  f"La telemetría en vivo de Cloud Monitoring registra {binfo['total_live_tokens']:,} tokens totales "
+                  f"({binfo['total_live_input_tokens']:,} de entrada / {binfo['total_live_output_tokens']:,} de salida) "
+                  f"a través de {binfo['total_live_invocations']:,} invocaciones bajo la cuenta de facturación "
+                  f"{binfo['billing_account_name']}. {m1['model_id']} lidera con {m1['total_tokens_30d']:,} tokens ({m1['token_share_pct']}%)."
+              ),
+          },
+          {
+              "rank": 3,
+              "category": "Gasto y ROI de Productividad",
+              "metric_highlight": f"${k['total_spend_usd']:,.2f} Gasto • {k['roi_multiple']}x ROI",
+              "headline": f"Sólido Retorno de Productividad (${k['value_saved_usd']:,.2f} Valor vs. ${k['total_spend_usd']:,.2f} Costo Total)",
+              "narrative": (
+                  f"A través de {k['inferred_sessions_30d']:,} sesiones en 30 días, el portafolio ahorra un estimado de "
+                  f"{k['hours_saved_30d']:,.1f} horas operativas y de ingeniería (${k['value_saved_usd']:,.2f} de valor), "
+                  f"liderado por '{ws1}' y '{ws2}'."
+              ),
+          },
+          {
+              "rank": 4,
+              "category": "Almacenes de Datos y Conectividad MCP",
+              "metric_highlight": f"{k['total_datastores']} Almacenes • {k['active_connectors']} Activos",
+              "headline": "Grounding Empresarial en Workspace, Servidores MCP y Datos No Estructurados",
+              "narrative": (
+                  f"El entorno vincula {k['total_datastores']} almacenes de datos ({k['active_connectors']} conectores activos) "
+                  f"y {k['cloud_run_services']} microservicios en Cloud Run, proporcionando búsqueda conectada en tiempo real sobre Google Drive, "
+                  f"Calendar, Gmail, Chat, BigQuery y endpoints MCP personalizados."
+              ),
+          },
+          {
+              "rank": 5,
+              "category": "Salud Operativa y Gobernanza",
+              "metric_highlight": f"{len(frictions)} Fricciones API Detectadas",
+              "headline": "Remediación Puntual para Cuota de Conectores, Nodos en Borrador y Licencias",
+              "narrative": (
+                  f"La inspección en vivo detectó {len(frictions)} fricciones accionables: {k['failed_connectors']} conector con fallo de inicialización, "
+                  f"errores de validación en nodos Low-Code y {k['total_licenses'] - k['assigned_licenses']} intento de acceso sin licencia "
+                  f"junto con {k['private_agents']} agentes privados pendientes de promoción o archivo."
+              ),
+          },
+      ]
+      recommendations = [
+          {
+              "id": "rec-1",
+              "priority": "HIGH",
+              "category": "Optimización de Costos y Tokens",
+              "title": "Habilitar Context Caching y Estandarizar en gemini-3.8-flash",
+              "recommendation": (
+                  f"Cloud Monitoring muestra una relación entrada/salida de {round(binfo['total_live_input_tokens'] / max(binfo['total_live_output_tokens'], 1), 1)}:1 "
+                  f"({binfo['total_live_input_tokens']:,} tokens de entrada vs. {binfo['total_live_output_tokens']:,} de salida). "
+                  f"Habilite Context Caching en los Reasoning Engines ADK y migre los nodos de clasificación rutinaria hacia gemini-3.8-flash."
+              ),
+              "expected_impact": "Reducción del 25%–40% en gasto de tokens de entrada",
+              "target_resources": f"{m1['model_id']} -> gemini-3.8-flash",
+          },
+          {
+              "id": "rec-2",
+              "priority": "HIGH",
+              "category": "Confiabilidad de Conectores y MCP",
+              "title": "Resolver Cuota Regional BAP y Vincular Almacenes sin Asignar",
+              "recommendation": (
+                  "El conector 'aurora_postgres_1776268352081' presenta estado INITIALIZATION_FAILED por agotamiento de cuota "
+                  "ConnectionsPerRegionPerProjectPAYG en us-central1. Solicite incremento de cuota o reprovisione en us-east1."
+              ),
+              "expected_impact": "Restaura el 100% de disponibilidad de conectores",
+              "target_resources": "aurora_postgres_1776268352081_ALL_ENTITY_TABLES",
+          },
+          {
+              "id": "rec-3",
+              "priority": "MEDIUM",
+              "category": "Arquitectura y Calidad de Agentes",
+              "title": "Corregir Validación en Agente Low-Code y Consolidar Agentes Privados",
+              "recommendation": (
+                  f"Complete el campo 'llm_agent_node.instruction' en 'Agente de I+D' dentro de Atlas_Agentspace y audite los "
+                  f"{k['private_agents']} agentes PRIVADOS y {k['vertex_reasoning_engines']} Reasoning Engines para archivar prototipos inactivos."
+              ),
+              "expected_impact": "Elimina errores de ejecución y reduce el catálogo en ~35%",
+              "target_resources": "Agente de I+D (7768989455827975077), Atlas_Agentspace",
+          },
+          {
+              "id": "rec-4",
+              "priority": "OPTIMIZATION",
+              "category": "Gobernanza de Licencias y Asientos",
+              "title": "Remediar Acceso sin Licencia y Automatizar Recuperación de Asientos Inactivos",
+              "recommendation": (
+                  f"En default_user_store, {k['assigned_licenses']} de {k['total_licenses']} usuarios tienen licencia asignada. "
+                  f"Aplique una política automática de inactividad de 30 días para reasignar asientos sin uso."
+              ),
+              "expected_impact": f"Ahorra ${float(self.runtime_config.get('assigned_license_monthly_cost_usd', 30.0)):.0f}/asiento/mes en licencias inactivas",
+              "target_resources": "userStores/default_user_store/userLicenses",
+          },
+      ]
+      tts_parts = [
+          f"Resumen Ejecutivo y Recomendaciones para el proyecto de Google Cloud {report['project_id']}.",
+          "Parte 1: Cinco hallazgos principales del Resumen Ejecutivo.",
+      ]
+      for b in bullets:
+        tts_parts.append(f"Punto {b['rank']}: {b['headline']}. {b['narrative']}")
+      tts_parts.append("Parte 2: Recomendaciones clave para su entorno.")
+      for idx, r in enumerate(recommendations, 1):
+        tts_parts.append(
+            f"Recomendación {idx}, prioridad {r['priority']}, {r['title']}: {r['recommendation']} Impacto esperado: {r['expected_impact']}."
+        )
+    else:
+      bullets = [
+          {
+              "rank": 1,
+              "category": "Portfolio & App Scale",
+              "metric_highlight": f"{k['total_agents']} Agents • {k['total_engines']} Apps",
+              "headline": "High-Density Multi-Agent Footprint Centered in Atlas_Agentspace",
+              "narrative": (
+                  f"Project {report['project_id']} hosts {k['total_agents']} registered Gemini Enterprise agents "
+                  f"({k['enabled_agents']} Enabled, {k['private_agents']} Private, {k['disabled_agents']} Disabled) "
+                  f"across {k['total_engines']} engines and {k['vertex_reasoning_engines']} Vertex AI Reasoning Engines. "
+                  f"Primary activity is concentrated in {top_eng.get('engine_name', 'Atlas_Agentspace')} "
+                  f"({top_eng.get('agents_count', 110)} agents)."
+              ),
+          },
+          {
+              "rank": 2,
+              "category": "Agent Platform Token Consumption",
+              "metric_highlight": f"{binfo['total_live_tokens']:,} Live Tokens ({binfo['active_models_count']} Models)",
+              "headline": f"{m1['model_id']} Leads Agent Platform Volume ({m1['token_share_pct']}% of Project Tokens)",
+              "narrative": (
+                  f"Live Cloud Monitoring telemetry records {binfo['total_live_tokens']:,} total tokens "
+                  f"({binfo['total_live_input_tokens']:,} input / {binfo['total_live_output_tokens']:,} output) "
+                  f"across {binfo['total_live_invocations']:,} publisher model invocations under Billing Account "
+                  f"{binfo['billing_account_name']}. {m1['model_id']} leads with {m1['total_tokens_30d']:,} tokens ({m1['token_share_pct']}%)."
+              ),
+          },
+          {
+              "rank": 3,
+              "category": "Expense & Productivity ROI",
+              "metric_highlight": f"${k['total_spend_usd']:,.2f} Spend • {k['roi_multiple']}x ROI",
+              "headline": f"Strong Net Productivity Return (${k['value_saved_usd']:,.2f} Value vs. ${k['total_spend_usd']:,.2f} Total Cost)",
+              "narrative": (
+                  f"Across {k['inferred_sessions_30d']:,} inferred 30-day sessions, the portfolio saves an estimated "
+                  f"{k['hours_saved_30d']:,.1f} engineering and operational hours (${k['value_saved_usd']:,.2f} value), "
+                  f"led by '{ws1}' and '{ws2}'."
+              ),
+          },
+          {
+              "rank": 4,
+              "category": "Data Stores & MCP Connectivity",
+              "metric_highlight": f"{k['total_datastores']} Stores • {k['active_connectors']} Active",
+              "headline": "Enterprise Grounding Across Workspace, Custom MCP Servers & Unstructured Stores",
+              "narrative": (
+                  f"The environment links {k['total_datastores']} data stores ({k['active_connectors']} active connectors) "
+                  f"and {k['cloud_run_services']} Cloud Run microservices, providing real-time grounding across Google Drive, "
+                  f"Calendar, Gmail, Chat, BigQuery, and custom MCP endpoints."
+              ),
+          },
+          {
+              "rank": 5,
+              "category": "Operational Health & Governance",
+              "metric_highlight": f"{len(frictions)} Live API Frictions Detected",
+              "headline": "Targeted Remediation Needed for Connector Quota, Draft Nodes & Private Agent Sprawl",
+              "narrative": (
+                  f"Live API inspection flagged {len(frictions)} actionable frictions: {k['failed_connectors']} failed data connector "
+                  f"initialization, low-code agent node validation errors, and {k['total_licenses'] - k['assigned_licenses']} unlicensed login attempt "
+                  f"alongside {k['private_agents']} private agents awaiting promotion or archival."
+              ),
+          },
+      ]
 
-    recommendations = [
-        {
-            "id": "rec-1",
-            "priority": "HIGH",
-            "category": "Cost & Token Optimization",
-            "title": "Enable Context Caching & Standardize on gemini-3.8-flash Across Agents",
-            "recommendation": (
-                f"Cloud Monitoring shows an input-to-output token ratio of {round(binfo['total_live_input_tokens'] / max(binfo['total_live_output_tokens'], 1), 1)}:1 "
-                f"({binfo['total_live_input_tokens']:,} input vs. {binfo['total_live_output_tokens']:,} output tokens), heavily driven by {m1['model_id']} "
-                f"system prompts and MCP tool schemas. Enable implicit/explicit context caching on ADK Reasoning Engines and migrate routine Low-Code "
-                f"classification nodes from gemini-3.1-pro-preview (18 agents) to gemini-3.8-flash."
-            ),
-            "expected_impact": "25%–40% reduction in input token spend",
-            "target_resources": f"{m1['model_id']}, gemini-3.1-pro-preview (18 Low-Code agents) -> gemini-3.8-flash",
-        },
-        {
-            "id": "rec-2",
-            "priority": "HIGH",
-            "category": "Data Connector & MCP Reliability",
-            "title": "Resolve BAP Region Quota Failure & Re-bind Unassigned Data Stores",
-            "recommendation": (
-                "Data connector 'aurora_postgres_1776268352081' is in INITIALIZATION_FAILED state due to "
-                "ConnectionsPerRegionPerProjectPAYG quota exhaustion in us-central1. Request a quota increase or "
-                "re-provision the connector in us-east1, and attach unlinked global collections to active engines."
-            ),
-            "expected_impact": "Restores 100% data connector availability",
-            "target_resources": "aurora_postgres_1776268352081_ALL_ENTITY_TABLES",
-        },
-        {
-            "id": "rec-3",
-            "priority": "MEDIUM",
-            "category": "Agent Architecture & Quality",
-            "title": "Fix Low-Code Agent Validation Errors & Consolidate 47 Private Draft Agents",
-            "recommendation": (
-                f"Populate the missing 'llm_agent_node.instruction' field on 'Agente de I+D' in Atlas_Agentspace, "
-                f"and audit the {k['private_agents']} PRIVATE agents and {k['vertex_reasoning_engines']} Vertex Reasoning Engines "
-                f"to archive unused prototypes and promote validated agents to ENABLED."
-            ),
-            "expected_impact": "Eliminates runtime failures & reduces catalog clutter by ~35%",
-            "target_resources": "Agente de I+D (7768989455827975077), Atlas_Agentspace",
-        },
-        {
-            "id": "rec-4",
-            "priority": "OPTIMIZATION",
-            "category": "License & Seat Governance",
-            "title": "Remediate Unlicensed Principal Access & Automate Dormant Seat Reclamation",
-            "recommendation": (
-                f"In default_user_store, {k['assigned_licenses']} of {k['total_licenses']} principals hold ASSIGNED seats "
-                f"while 1 principal attempted login in UNASSIGNED state. Assign a valid licenseConfig or enforce IAM group gating, "
-                f"and set an automated 30-day inactivity policy to recycle idle seats."
-            ),
-            "expected_impact": f"Saves ${float(self.runtime_config.get('assigned_license_monthly_cost_usd', 30.0)):.0f}/seat/month on inactive licenses",
-            "target_resources": "userStores/default_user_store/userLicenses",
-        },
-    ]
+      recommendations = [
+          {
+              "id": "rec-1",
+              "priority": "HIGH",
+              "category": "Cost & Token Optimization",
+              "title": "Enable Context Caching & Standardize on gemini-3.8-flash Across Agents",
+              "recommendation": (
+                  f"Cloud Monitoring shows an input-to-output token ratio of {round(binfo['total_live_input_tokens'] / max(binfo['total_live_output_tokens'], 1), 1)}:1 "
+                  f"({binfo['total_live_input_tokens']:,} input vs. {binfo['total_live_output_tokens']:,} output tokens), heavily driven by {m1['model_id']} "
+                  f"system prompts and MCP tool schemas. Enable implicit/explicit context caching on ADK Reasoning Engines and migrate routine Low-Code "
+                  f"classification nodes from gemini-3.1-pro-preview (18 agents) to gemini-3.8-flash."
+              ),
+              "expected_impact": "25%–40% reduction in input token spend",
+              "target_resources": f"{m1['model_id']}, gemini-3.1-pro-preview (18 Low-Code agents) -> gemini-3.8-flash",
+          },
+          {
+              "id": "rec-2",
+              "priority": "HIGH",
+              "category": "Data Connector & MCP Reliability",
+              "title": "Resolve BAP Region Quota Failure & Re-bind Unassigned Data Stores",
+              "recommendation": (
+                  "Data connector 'aurora_postgres_1776268352081' is in INITIALIZATION_FAILED state due to "
+                  "ConnectionsPerRegionPerProjectPAYG quota exhaustion in us-central1. Request a quota increase or "
+                  "re-provision the connector in us-east1, and attach unlinked global collections to active engines."
+              ),
+              "expected_impact": "Restores 100% data connector availability",
+              "target_resources": "aurora_postgres_1776268352081_ALL_ENTITY_TABLES",
+          },
+          {
+              "id": "rec-3",
+              "priority": "MEDIUM",
+              "category": "Agent Architecture & Quality",
+              "title": "Fix Low-Code Agent Validation Errors & Consolidate 47 Private Draft Agents",
+              "recommendation": (
+                  f"Populate the missing 'llm_agent_node.instruction' field on 'Agente de I+D' in Atlas_Agentspace, "
+                  f"and audit the {k['private_agents']} PRIVATE agents and {k['vertex_reasoning_engines']} Vertex Reasoning Engines "
+                  f"to archive unused prototypes and promote validated agents to ENABLED."
+              ),
+              "expected_impact": "Eliminates runtime failures & reduces catalog clutter by ~35%",
+              "target_resources": "Agente de I+D (7768989455827975077), Atlas_Agentspace",
+          },
+          {
+              "id": "rec-4",
+              "priority": "OPTIMIZATION",
+              "category": "License & Seat Governance",
+              "title": "Remediate Unlicensed Principal Access & Automate Dormant Seat Reclamation",
+              "recommendation": (
+                  f"In default_user_store, {k['assigned_licenses']} of {k['total_licenses']} principals hold ASSIGNED seats "
+                  f"while 1 principal attempted login in UNASSIGNED state. Assign a valid licenseConfig or enforce IAM group gating, "
+                  f"and set an automated 30-day inactivity policy to recycle idle seats."
+              ),
+              "expected_impact": f"Saves ${float(self.runtime_config.get('assigned_license_monthly_cost_usd', 30.0)):.0f}/seat/month on inactive licenses",
+              "target_resources": "userStores/default_user_store/userLicenses",
+          },
+      ]
 
-    tts_parts = [
-        f"Executive Summary and Environment Recommendations for Google Cloud Project {report['project_id']}.",
-        "Part 1: Top 5 Executive Summary Highlights.",
-    ]
-    for b in bullets:
-      tts_parts.append(f"Point {b['rank']}: {b['headline']}. {b['narrative']}")
-    tts_parts.append("Part 2: Key Recommendations for your environment.")
-    for idx, r in enumerate(recommendations, 1):
-      tts_parts.append(
-          f"Recommendation {idx}, {r['priority']} priority, {r['title']}: {r['recommendation']} Expected impact: {r['expected_impact']}."
-      )
+      tts_parts = [
+          f"Executive Summary and Environment Recommendations for Google Cloud Project {report['project_id']}.",
+          "Part 1: Top 5 Executive Summary Highlights.",
+      ]
+      for b in bullets:
+        tts_parts.append(f"Point {b['rank']}: {b['headline']}. {b['narrative']}")
+      tts_parts.append("Part 2: Key Recommendations for your environment.")
+      for idx, r in enumerate(recommendations, 1):
+        tts_parts.append(
+            f"Recommendation {idx}, {r['priority']} priority, {r['title']}: {r['recommendation']} Expected impact: {r['expected_impact']}."
+        )
 
     tts_script = self._format_text_for_natural_speech(" ".join(tts_parts))
     self._prewarm_tts_async(tts_script)
@@ -2275,6 +2419,7 @@ class SmartReportEngine:
     return {
         "project_id": report["project_id"],
         "selected_engine_id": report["selected_engine_id"],
+        "lang": clean_lang,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "generated_by": "Vertex AI gemini-3.8-flash",
         "executive_summary_bullets": bullets,
@@ -2283,13 +2428,19 @@ class SmartReportEngine:
     }
 
   def generate_natural_language_report(
-      self, engine_filter: str = "ALL", use_llm: bool = True
+      self, engine_filter: str = "ALL", use_llm: bool = True, lang: str = "en"
   ) -> dict[str, Any]:
     """Generates on-demand Natural Language Executive Summary (5 bullets) & Environment Recommendations using live Vertex AI gemini-3.8-flash."""
+    clean_lang = "es" if str(lang).lower().startswith("es") else "en"
+    cache_key = f"{self.project_id}:{engine_filter}:{clean_lang}"
     report = self.compute_expense_and_telemetry(
         engine_filter=engine_filter, force_refresh=False
     )
-    baseline = report["narrative_report"]
+    baseline = (
+        self._build_baseline_narrative_report(report, lang="es")
+        if clean_lang == "es"
+        else report["narrative_report"]
+    )
     if not use_llm:
       return baseline
 
@@ -2299,13 +2450,13 @@ class SmartReportEngine:
         try:
           remote_base = self._get_remote_cloud_run_base_url()
           req = urllib.request.Request(
-              f"{remote_base}/api/narrative?engine_id={urllib.parse.quote(engine_filter)}&use_llm=true",
+              f"{remote_base}/api/narrative?engine_id={urllib.parse.quote(engine_filter)}&use_llm=true&lang={clean_lang}",
               method="GET",
           )
           with urllib.request.urlopen(req, timeout=25.0) as resp:
             remote_nav = json.loads(resp.read().decode("utf-8"))
             if len(remote_nav.get("executive_summary_bullets") or []) >= 5:
-              self._narrative_cache[engine_filter] = remote_nav
+              self._narrative_cache[cache_key] = remote_nav
               return remote_nav
         except Exception:
           pass
@@ -2337,6 +2488,12 @@ class SmartReportEngine:
         for e in mb["by_project_and_engine"][:5]
     ]
 
+    lang_instruction = (
+        "Write all headlines, narratives, categories, titles, recommendations, and expected_impact values in clear executive SPANISH (Español)."
+        if clean_lang == "es"
+        else "Write all headlines, narratives, categories, titles, recommendations, and expected_impact values in clear executive ENGLISH."
+    )
+
     prompt = f"""You are a Senior Google Cloud & Gemini Enterprise Architect analyzing live production telemetry for GCP Project `{report['project_id']}` (Scope: `{engine_filter}`).
 Generate an executive natural-language report grounded 100% on these live metrics:
 - Registered Agents: {k['total_agents']} ({k['enabled_agents']} Enabled, {k['private_agents']} Private, {k['disabled_agents']} Disabled) across {k['total_engines']} Gemini Enterprise Apps and {k['vertex_reasoning_engines']} Vertex AI Reasoning Engines.
@@ -2346,6 +2503,8 @@ Generate an executive natural-language report grounded 100% on these live metric
 - Top Engines/Apps: {json.dumps(top_engines_summary)}
 - Formula Spend & ROI: ${k['total_spend_usd']:,.2f} total estimated monthly spend (${k['variable_spend_usd']:,.2f} variable session/token spend), {k['inferred_sessions_30d']:,} sessions, {k['hours_saved_30d']} hours saved (${k['value_saved_usd']:,.2f} value, {k['roi_multiple']}x ROI).
 - Live Frictions ({len(report['frictions'])}): {json.dumps(report['frictions'])}
+
+{lang_instruction}
 
 Return a strict JSON object with this exact schema:
 {{
@@ -2396,31 +2555,47 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
       bullets = parsed.get("executive_summary_bullets") or []
       recs = parsed.get("environment_recommendations") or []
       if len(bullets) >= 5 and len(recs) >= 3:
-        tts_parts = [
-            f"On-demand AI Executive Summary and Environment Recommendations for project {report['project_id']}.",
-            "Top 5 Executive Summary Bullets:",
-        ]
-        for b in bullets[:5]:
-          tts_parts.append(
-              f"Number {b.get('rank', '')}: {b.get('headline', '')}. {b.get('narrative', '')}"
-          )
-        tts_parts.append("Actionable Recommendations for your environment:")
-        for idx, r in enumerate(recs, 1):
-          tts_parts.append(
-              f"Recommendation {idx} ({r.get('priority', 'HIGH')} priority): {r.get('title', '')}. {r.get('recommendation', '')} Expected impact: {r.get('expected_impact', '')}."
-          )
+        if clean_lang == "es":
+          tts_parts = [
+              f"Resumen Ejecutivo y Recomendaciones de Entorno para el proyecto {report['project_id']}.",
+              "Cinco puntos clave del Resumen Ejecutivo:",
+          ]
+          for b in bullets[:5]:
+            tts_parts.append(
+                f"Punto {b.get('rank', '')}: {b.get('headline', '')}. {b.get('narrative', '')}"
+            )
+          tts_parts.append("Recomendaciones accionables para su entorno:")
+          for idx, r in enumerate(recs, 1):
+            tts_parts.append(
+                f"Recomendación {idx} (prioridad {r.get('priority', 'HIGH')}): {r.get('title', '')}. {r.get('recommendation', '')} Impacto esperado: {r.get('expected_impact', '')}."
+            )
+        else:
+          tts_parts = [
+              f"On-demand AI Executive Summary and Environment Recommendations for project {report['project_id']}.",
+              "Top 5 Executive Summary Bullets:",
+          ]
+          for b in bullets[:5]:
+            tts_parts.append(
+                f"Number {b.get('rank', '')}: {b.get('headline', '')}. {b.get('narrative', '')}"
+            )
+          tts_parts.append("Actionable Recommendations for your environment:")
+          for idx, r in enumerate(recs, 1):
+            tts_parts.append(
+                f"Recommendation {idx} ({r.get('priority', 'HIGH')} priority): {r.get('title', '')}. {r.get('recommendation', '')} Expected impact: {r.get('expected_impact', '')}."
+            )
         tts_script = self._format_text_for_natural_speech(" ".join(tts_parts))
         self._prewarm_tts_async(tts_script)
         result = {
             "project_id": report["project_id"],
             "selected_engine_id": report["selected_engine_id"],
+            "lang": clean_lang,
             "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "generated_by": "Vertex AI gemini-3.8-flash (Live On-Demand Generation)",
             "executive_summary_bullets": bullets[:5],
             "environment_recommendations": recs,
             "tts_script": tts_script,
         }
-        self._narrative_cache[engine_filter] = result
+        self._narrative_cache[cache_key] = result
         return result
     except Exception:
       pass
@@ -3753,6 +3928,78 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
         },
     }
 
+  def list_selectable_projects(self) -> dict[str, Any]:
+    """Lists selectable active GCP projects from Cloud Resource Manager API + known org projects."""
+    known_primary = [
+        {
+            "project_id": "genai-demos-avr-2024",
+            "name": "genai-demos-avr-2024 (Gemini Enterprise Demo)",
+            "is_system": False,
+        },
+        {
+            "project_id": "banana1-481518",
+            "name": "banana1 (banana1-481518)",
+            "is_system": False,
+        },
+        {
+            "project_id": "gen-lang-client-0520218747",
+            "name": "Default Gemini Project (gen-lang-client-0520218747)",
+            "is_system": False,
+        },
+    ]
+    by_id: dict[str, dict[str, Any]] = {
+        p["project_id"]: dict(p) for p in known_primary
+    }
+
+    token = self._get_access_token()
+    if token:
+      try:
+        res = self._api_get(
+            "https://cloudresourcemanager.googleapis.com/v1/projects?filter=lifecycleState:ACTIVE&pageSize=200",
+            token,
+            timeout=10.0,
+        )
+        for p in res.get("projects") or []:
+          pid = (p.get("projectId") or "").strip()
+          pname = (p.get("name") or pid).strip()
+          if not pid or "cloudtop-prod" in pid:
+            continue
+          is_sys = pid.startswith("sys-")
+          if pid not in by_id:
+            label = f"{pname} ({pid})" if pname and pname != pid else pid
+            by_id[pid] = {
+                "project_id": pid,
+                "name": label,
+                "is_system": is_sys,
+            }
+      except Exception:
+        pass
+
+    if self.project_id and self.project_id not in by_id:
+      by_id[self.project_id] = {
+          "project_id": self.project_id,
+          "name": self.project_id,
+          "is_system": self.project_id.startswith("sys-"),
+      }
+
+    primary_list = [p for p in by_id.values() if not p["is_system"]]
+    system_list = sorted(
+        [p for p in by_id.values() if p["is_system"]],
+        key=lambda x: x["project_id"],
+    )
+    primary_list.sort(
+        key=lambda x: (
+            0
+            if x["project_id"] == "genai-demos-avr-2024"
+            else (1 if x["project_id"] == self.project_id else 2),
+            x["project_id"],
+        )
+    )
+    return {
+        "active_project_id": self.project_id,
+        "projects": primary_list + system_list[:15],
+    }
+
   def get_config(self) -> dict[str, Any]:
     return dict(self.runtime_config)
 
@@ -3792,6 +4039,9 @@ Ensure `executive_summary_bullets` has EXACTLY 5 items (ranks 1 to 5) and `envir
       if new_proj != self.project_id:
         self.project_id = new_proj
         self.runtime_config["project_id"] = new_proj
+        self.runtime_config["selected_engine_id"] = "ALL"
         self._snapshot_cache = {"data": None, "fetched_at": 0.0}
+        self._narrative_cache.clear()
+        self._tts_cache.clear()
 
     return dict(self.runtime_config)

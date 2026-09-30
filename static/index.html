@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,70 +7,120 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=3.3.1" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.4.0" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <!-- Left Burger Menu Configuration & "Understand Expense" Drawer -->
+  <!-- Left Burger Menu Configuration, Appearance, i18n, Solution Architecture & "Understand Expense" Drawer -->
   <div id="configDrawerBackdrop" class="left-drawer-backdrop">
     <aside class="left-drawer" role="dialog" aria-label="Configuration and Expense Formula">
+      <div class="google-brand-bar" aria-hidden="true"></div>
       <div class="left-drawer-header">
         <div class="brand-row">
           <span class="google-spark-icon">✦</span>
           <div>
-            <h2>Smart Reports Configuration</h2>
-            <p class="muted">Live Discovery Engine API, Token Billing &amp; Expense Formula</p>
+            <h2 data-i18n="drawer_title">Smart Reports Configuration</h2>
+            <p class="muted" data-i18n="drawer_subtitle">Project Scope, i18n, Theme, Solution Architecture &amp; Live Expense Formula</p>
           </div>
         </div>
         <button id="closeConfigDrawerBtn" class="icon-btn" aria-label="Close menu">&times;</button>
       </div>
 
       <div class="left-drawer-body">
-        <!-- Quick Navigation -->
+        <!-- 1. Appearance, Language (i18n) & Solution Architecture (Moved from top tab bar into Burger Menu) -->
         <div class="drawer-section">
-          <div class="drawer-section-title">Quick Navigation</div>
+          <div class="drawer-section-title" data-i18n="drawer_appearance_arch_title">Appearance, Language &amp; Solution Architecture</div>
+
+          <div class="cfg-grid-2" style="margin-bottom: 10px;">
+            <div class="cfg-field">
+              <span data-i18n="cfg_language_label">Language / Idioma (i18n)</span>
+              <div class="segmented-tabs full-width-seg" id="langSegmentedControl" role="group" aria-label="Language selector">
+                <button type="button" class="seg-btn active" data-lang="en" id="langBtnEn">🌐 English (EN)</button>
+                <button type="button" class="seg-btn" data-lang="es" id="langBtnEs">🌐 Español (ES)</button>
+              </div>
+            </div>
+
+            <div class="cfg-field">
+              <span data-i18n="cfg_theme_label">Theme / Modo Visual</span>
+              <div class="segmented-tabs full-width-seg" id="themeSegmentedControl" role="group" aria-label="Theme mode selector">
+                <button type="button" class="seg-btn active" data-theme-mode="light" id="themeBtnLight" data-i18n="theme_light_btn">☀️ Light</button>
+                <button type="button" class="seg-btn" data-theme-mode="dark" id="themeBtnDark" data-i18n="theme_dark_btn">🌙 Dark</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Solution Architecture Launcher inside Burger Menu Config -->
+          <div class="drawer-arch-card">
+            <div class="drawer-arch-info">
+              <div class="drawer-arch-title" data-i18n="drawer_arch_card_title">🏗️ Solution Architecture (Conceptual)</div>
+              <div class="drawer-arch-desc" data-i18n="drawer_arch_card_desc">5-layer end-to-end conceptual architecture diagram of Gemini Enterprise Smart Reports</div>
+            </div>
+            <button type="button" id="openArchitectureFromDrawerBtn" class="btn btn-primary btn-sm" data-i18n="drawer_arch_open_btn">
+              Open Architecture View &rarr;
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. GCP Project Dropdown & Cache Settings (Auto-regenerates report on project change) -->
+        <div class="drawer-section">
+          <div class="drawer-section-title" data-i18n="drawer_project_section_title">GCP Project &amp; Cache Settings</div>
+          <label class="cfg-field">
+            <span data-i18n="cfg_project_label">GCP Project ID (Auto-regenerates report on change)</span>
+            <select id="cfgProjectId" class="cfg-select" aria-label="GCP Project ID">
+              <option value="genai-demos-avr-2024">genai-demos-avr-2024 — Loading projects...</option>
+            </select>
+          </label>
+          <label class="cfg-field">
+            <span data-i18n="cfg_cache_ttl_label">API Snapshot Cache TTL (seconds)</span>
+            <input id="cfgCacheTtl" type="number" min="10" max="3600" value="120" />
+          </label>
+        </div>
+
+        <!-- 3. Quick Navigation -->
+        <div class="drawer-section">
+          <div class="drawer-section-title" data-i18n="drawer_quick_nav_title">Quick Navigation</div>
           <nav class="drawer-nav">
-            <a href="#section-kpis" data-target-tab="OVERVIEW" class="drawer-nav-link">📊 Overview &amp; KPIs</a>
-            <a href="#section-narrative" data-target-tab="OVERVIEW" class="drawer-nav-link">✨ Executive Summary &amp; TTS</a>
-            <a href="#section-charts" data-target-tab="OVERVIEW" class="drawer-nav-link">📈 Workstreams &amp; Deliverables</a>
-            <a href="#section-model-billing" data-target-tab="OVERVIEW" class="drawer-nav-link">🪙 Token Billing (Model/Agent)</a>
-            <a href="#section-lineage-graph" data-target-tab="OVERVIEW" class="drawer-nav-link">🕸️ 122-Agent Lineage Graph</a>
-            <a href="#section-datastores" data-target-tab="OVERVIEW" class="drawer-nav-link">🗄️ Connected Data Stores</a>
-            <a href="#section-agents" data-target-tab="OVERVIEW" class="drawer-nav-link">🤖 Registered Agents (122)</a>
-            <a href="#section-frictions" data-target-tab="OVERVIEW" class="drawer-nav-link">⚠️ Live API Frictions &amp; Users</a>
-            <a href="#section-admin-adoption" data-target-tab="ADOPTION" class="drawer-nav-link">👥 Telemetría y Adopción (Admin)</a>
-            <a href="#section-architecture" data-target-tab="ARCHITECTURE" class="drawer-nav-link">🏗️ Solution Architecture</a>
+            <a href="#section-kpis" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_kpis">📊 Overview &amp; KPIs</a>
+            <a href="#section-narrative" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_narrative">✨ Executive Summary &amp; TTS</a>
+            <a href="#section-charts" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_charts">📈 Workstreams &amp; Deliverables</a>
+            <a href="#section-model-billing" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_billing">🪙 Token Billing (Model/Agent)</a>
+            <a href="#section-lineage-graph" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_lineage">🕸️ Agent Lineage Graph</a>
+            <a href="#section-datastores" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_datastores">🗄️ Connected Data Stores</a>
+            <a href="#section-agents" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_agents">🤖 Registered Agents</a>
+            <a href="#section-frictions" data-target-tab="OVERVIEW" class="drawer-nav-link" data-i18n="nav_frictions">⚠️ Live API Frictions &amp; Users</a>
+            <a href="#section-admin-adoption" data-target-tab="ADOPTION" class="drawer-nav-link" data-i18n="nav_adoption">👥 Telemetry &amp; Adoption (6 Dimensions)</a>
+            <a href="#section-architecture" data-target-tab="ARCHITECTURE" class="drawer-nav-link" data-i18n="nav_architecture">🏗️ Solution Architecture</a>
           </nav>
         </div>
 
-        <!-- Understand Expense & Formula Section (Moved from main dashboard into Burger Menu Config) -->
+        <!-- 4. Understand Expense & Formula Section -->
         <div class="drawer-section expense-formula-section">
-          <div class="drawer-section-title">ƒx Live Expense Formula (Understand Expense)</div>
+          <div class="drawer-section-title" data-i18n="drawer_formula_title">ƒx Live Expense Formula (Understand Expense)</div>
           <div class="formula-strip drawer-formula-banner">
             <div class="formula-strip-left">
-              <span class="formula-badge">ƒx LIVE EXPENSE FORMULA</span>
+              <span class="formula-badge" data-i18n="formula_badge_label">ƒx LIVE EXPENSE FORMULA</span>
               <span id="liveEquationBannerText" class="formula-strip-text">Calculating from live Discovery Engine &amp; Cloud Monitoring API counts...</span>
             </div>
           </div>
-          <p class="formula-explainer">
-            Combines <strong>100% live Cloud Monitoring token telemetry</strong> (<code>aiplatform.googleapis.com/publisher/online_serving/token_count</code>) and <strong>live Discovery Engine resource inventories</strong> (agents, data stores, connectors, licenses) with transparent, customizable pricing coefficients:
+          <p class="formula-explainer" data-i18n="formula_explainer_text">
+            Combines 100% live Cloud Monitoring token telemetry (aiplatform.googleapis.com/publisher/online_serving/token_count) and live Discovery Engine resource inventories (agents, data stores, connectors, licenses) with transparent, customizable pricing coefficients:
           </p>
 
           <div class="formula-box">
             <div class="formula-line">
-              <strong>1. Live Model Token Spend (Cloud Monitoring):</strong>
+              <strong data-i18n="formula_line_1">1. Live Model Token Spend (Cloud Monitoring):</strong>
               <code>&Sigma; [ (ModelInputTokens / 1M) &times; ModelInRate + (ModelOutputTokens / 1M) &times; ModelOutRate ]</code>
             </div>
             <div class="formula-line">
-              <strong>2. Variable Session &amp; Turn Spend:</strong>
+              <strong data-i18n="formula_line_2">2. Variable Session &amp; Turn Spend:</strong>
               <code>Sessions &times; Turns &times; ((InTokens &times; InPrice + OutTokens &times; OutPrice)/1M + InvocationFee) &times; ArchIntensity</code>
             </div>
             <div class="formula-line">
-              <strong>3. Infrastructure &amp; Seat Spend:</strong>
+              <strong data-i18n="formula_line_3">3. Infrastructure &amp; Seat Spend:</strong>
               <code>(ActiveConnectors &times; ConnectorMonthlyCost) + (AssignedLicenses &times; LicenseMonthlyCost)</code>
             </div>
             <div class="formula-line">
-              <strong>4. Productivity Value Saved:</strong>
+              <strong data-i18n="formula_line_4">4. Productivity Value Saved:</strong>
               <code>(Sessions &times; AvgMinutesSaved / 60) &times; HourlyRate</code>
             </div>
             <div id="drawerLiveEquation" class="formula-live-preview">
@@ -80,87 +130,75 @@
 
           <div class="cfg-grid-2">
             <label class="cfg-field">
-              <span>Ref Input Token Price ($ / 1M)</span>
+              <span data-i18n="cfg_in_price">Ref Input Token Price ($ / 1M)</span>
               <input id="cfgInputPrice" type="number" step="0.05" min="0" value="1.25" />
             </label>
             <label class="cfg-field">
-              <span>Ref Output Token Price ($ / 1M)</span>
+              <span data-i18n="cfg_out_price">Ref Output Token Price ($ / 1M)</span>
               <input id="cfgOutputPrice" type="number" step="0.10" min="0" value="5.00" />
             </label>
             <label class="cfg-field">
-              <span>Avg Input Tokens / Turn</span>
+              <span data-i18n="cfg_in_tokens">Avg Input Tokens / Turn</span>
               <input id="cfgInputTokens" type="number" step="100" min="100" value="3800" />
             </label>
             <label class="cfg-field">
-              <span>Avg Output Tokens / Turn</span>
+              <span data-i18n="cfg_out_tokens">Avg Output Tokens / Turn</span>
               <input id="cfgOutputTokens" type="number" step="100" min="100" value="1400" />
             </label>
             <label class="cfg-field">
-              <span>Avg Turns / Session</span>
+              <span data-i18n="cfg_turns_session">Avg Turns / Session</span>
               <input id="cfgTurnsSession" type="number" step="0.5" min="1" value="4.0" />
             </label>
             <label class="cfg-field">
-              <span>Agent Run Fee ($ / turn)</span>
+              <span data-i18n="cfg_run_fee">Agent Run Fee ($ / turn)</span>
               <input id="cfgInvocationFee" type="number" step="0.01" min="0" value="0.05" />
             </label>
             <label class="cfg-field">
-              <span>Active Connector ($ / mo)</span>
+              <span data-i18n="cfg_conn_cost">Active Connector ($ / mo)</span>
               <input id="cfgConnectorCost" type="number" step="1" min="0" value="15.00" />
             </label>
             <label class="cfg-field">
-              <span>Assigned License ($ / mo)</span>
+              <span data-i18n="cfg_lic_cost">Assigned License ($ / mo)</span>
               <input id="cfgLicenseCost" type="number" step="1" min="0" value="30.00" />
             </label>
             <label class="cfg-field">
-              <span>Sessions / Enabled Agent</span>
+              <span data-i18n="cfg_sess_enabled">Sessions / Enabled Agent</span>
               <input id="cfgSessionsEnabled" type="number" step="1" min="0" value="12" />
             </label>
             <label class="cfg-field">
-              <span>Sessions / Private Agent</span>
+              <span data-i18n="cfg_sess_private">Sessions / Private Agent</span>
               <input id="cfgSessionsPrivate" type="number" step="1" min="0" value="3" />
             </label>
             <label class="cfg-field">
-              <span>Minutes Saved / Session</span>
+              <span data-i18n="cfg_min_saved">Minutes Saved / Session</span>
               <input id="cfgMinutesSaved" type="number" step="1" min="1" value="18" />
             </label>
             <label class="cfg-field">
-              <span>Hourly Rate ($ / hr)</span>
+              <span data-i18n="cfg_hourly_rate">Hourly Rate ($ / hr)</span>
               <input id="cfgHourlyRate" type="number" step="5" min="5" value="45" />
             </label>
           </div>
         </div>
 
-        <!-- Project & Scope Settings -->
-        <div class="drawer-section">
-          <div class="drawer-section-title">GCP Project &amp; Cache Settings</div>
-          <label class="cfg-field">
-            <span>GCP Project ID</span>
-            <input id="cfgProjectId" type="text" placeholder="e.g. genai-demos-avr-2024" />
-          </label>
-          <label class="cfg-field">
-            <span>API Snapshot Cache TTL (seconds)</span>
-            <input id="cfgCacheTtl" type="number" min="10" max="3600" value="120" />
-          </label>
-        </div>
-
         <div class="drawer-actions">
-          <button id="saveConfigBtn" class="btn btn-primary full-width">Apply Formula &amp; Recalculate Live Report</button>
+          <button id="saveConfigBtn" class="btn btn-primary full-width" data-i18n="save_config_btn">Apply Formula &amp; Recalculate Live Report</button>
         </div>
       </div>
     </aside>
   </div>
 
-  <!-- Top Google Cloud Console Header -->
+  <!-- Top Google Brand Header -->
   <header class="top-header">
+    <div class="google-brand-bar" aria-hidden="true"></div>
     <div class="header-inner">
       <div class="header-left">
-        <button id="openConfigDrawerBtn" class="burger-btn" title="Open Configuration &amp; Expense Formula" aria-label="Open Configuration Menu">
+        <button id="openConfigDrawerBtn" class="burger-btn" title="Open Configuration, Language, Theme &amp; Architecture" aria-label="Open Configuration Menu">
           <span></span><span></span><span></span>
         </button>
         <div class="brand-title-group">
           <div class="brand-heading">
             <span class="google-spark-icon">✦</span>
-            <h1>Gemini Enterprise Smart Reports</h1>
+            <h1 data-i18n="app_title">Gemini Enterprise Smart Reports</h1>
             <span id="projectBadge" class="project-pill">Loading project...</span>
           </div>
           <p id="headerMetaSub" class="header-sub">Live Discovery Engine v1alpha, Cloud Monitoring Token Billing, Admin Adoption &amp; Conceptual Architecture</p>
@@ -169,35 +207,30 @@
 
       <div class="header-controls">
         <div class="control-group">
-          <label for="engineSelect">Gemini Enterprise App</label>
+          <label for="engineSelect" data-i18n="header_app_label">Gemini Enterprise App</label>
           <select id="engineSelect">
             <option value="ALL">All Engines (Loading...)</option>
           </select>
         </div>
         <button id="headerTtsBtn" class="btn btn-tts" title="Listen to the Executive Summary &amp; Recommendations">🔊 Read Me the Report</button>
-        <button id="openExpenseFormulaBtn" class="btn btn-secondary">ƒx Understand Expense</button>
-        <button id="refreshLiveBtn" class="btn btn-primary">↻ Refresh Live API</button>
+        <button id="openExpenseFormulaBtn" class="btn btn-secondary" data-i18n="header_formula_btn">ƒx Understand Expense</button>
+        <button id="refreshLiveBtn" class="btn btn-primary" data-i18n="header_refresh_btn">↻ Refresh Live API</button>
       </div>
     </div>
   </header>
 
   <main class="container">
-    <!-- Primary View Tab Navigation Bar -->
+    <!-- Primary View Tab Navigation Bar (2 Operational Tabs; Solution Architecture is in the Burger Menu) -->
     <nav class="primary-view-tabs" id="primaryViewTabs" aria-label="Primary Dashboard Views">
       <button type="button" class="primary-tab-btn view-tab-btn active" data-main-tab="OVERVIEW" id="tabBtnOverview">
         <span class="tab-icon">📊</span>
-        <span class="tab-title">Executive &amp; Operations Overview</span>
-        <span class="tab-pill" id="tabBadgeOverview">Live Telemetry</span>
+        <span class="tab-title" data-i18n="tab_overview_title">Executive &amp; Operations Overview</span>
+        <span class="tab-pill" id="tabBadgeOverview" data-i18n="tab_overview_badge">Live Telemetry</span>
       </button>
       <button type="button" class="primary-tab-btn view-tab-btn" data-main-tab="ADOPTION" id="tabBtnAdoption">
         <span class="tab-icon">👥</span>
-        <span class="tab-title">Telemetría y Adopción (Admin)</span>
-        <span class="tab-pill tab-pill-blue" id="tabBadgeAdoption">6 Admin Insights</span>
-      </button>
-      <button type="button" class="primary-tab-btn view-tab-btn" data-main-tab="ARCHITECTURE" id="tabBtnArchitecture">
-        <span class="tab-icon">🏗️</span>
-        <span class="tab-title">Solution Architecture</span>
-        <span class="tab-pill tab-pill-teal">Conceptual</span>
+        <span class="tab-title" data-i18n="tab_adoption_title">Telemetry &amp; Adoption (Admin)</span>
+        <span class="tab-pill tab-pill-blue" id="tabBadgeAdoption" data-i18n="tab_adoption_badge">6 Dimensions</span>
       </button>
     </nav>
 
@@ -208,27 +241,42 @@
     <!-- 1. KPI Summary Strip -->
     <section id="section-kpis" class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-label">Registered Agents (Live API)</div>
+        <div class="kpi-top">
+          <div class="kpi-label" data-i18n="kpi_agents_label">Registered Agents (Live API)</div>
+          <span class="kpi-dot dot-blue"></span>
+        </div>
         <div class="kpi-value" id="kpiTotalAgents">--</div>
         <div class="kpi-meta" id="kpiAgentsBreakdown">Loading Discovery Engine agents...</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Connected Data Stores</div>
+        <div class="kpi-top">
+          <div class="kpi-label" data-i18n="kpi_datastores_label">Connected Data Stores</div>
+          <span class="kpi-dot dot-green"></span>
+        </div>
         <div class="kpi-value" id="kpiTotalDatastores">--</div>
         <div class="kpi-meta" id="kpiDatastoresBreakdown">Loading collections &amp; connectors...</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Agent Platform Token Volume (30d)</div>
+        <div class="kpi-top">
+          <div class="kpi-label" data-i18n="kpi_tokens_label">Agent Platform Token Volume (30d)</div>
+          <span class="kpi-dot dot-yellow"></span>
+        </div>
         <div class="kpi-value" id="kpiLiveTokens">--</div>
         <div class="kpi-meta" id="kpiLiveTokensMeta">Loading Cloud Monitoring token_count...</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Vertex Reasoning &amp; Cloud Run</div>
+        <div class="kpi-top">
+          <div class="kpi-label" data-i18n="kpi_runtime_label">Vertex Reasoning &amp; Cloud Run</div>
+          <span class="kpi-dot dot-red"></span>
+        </div>
         <div class="kpi-value" id="kpiRuntimeCount">--</div>
         <div class="kpi-meta" id="kpiRuntimeMeta">Loading Vertex AI &amp; Cloud Run...</div>
       </div>
       <div class="kpi-card kpi-card-highlight" id="kpiExpenseCard" title="Click to open Expense Formula">
-        <div class="kpi-label">Formula-Inferred Spend &amp; Value</div>
+        <div class="kpi-top">
+          <div class="kpi-label" data-i18n="kpi_spend_label">Formula-Inferred Spend &amp; Value</div>
+          <span class="kpi-dot dot-green"></span>
+        </div>
         <div class="kpi-value" id="kpiTotalSpend">--</div>
         <div class="kpi-meta" id="kpiRoiMeta">Click to inspect formula breakdown</div>
       </div>
@@ -239,14 +287,14 @@
       <div class="card-header narrative-header">
         <div>
           <div class="narrative-title-row">
-            <h2>Executive Summary &amp; Environment Recommendations</h2>
+            <h2 data-i18n="narrative_title">Executive Summary &amp; Environment Recommendations</h2>
           </div>
-          <p class="card-sub">
+          <p class="card-sub" data-i18n="narrative_sub">
             On-demand synthesis of your top 5 executive insights and actionable architecture, connector &amp; token optimization recommendations
           </p>
         </div>
         <div class="narrative-actions">
-          <button id="generateNarrativeBtn" class="btn btn-primary">
+          <button id="generateNarrativeBtn" class="btn btn-primary" data-i18n="narrative_generate_btn">
             ✨ Generate On-Demand Report (gemini-3.8-flash)
           </button>
         </div>
@@ -257,11 +305,11 @@
         <div class="tts-left">
           <button id="ttsPlayToggleBtn" class="btn btn-tts-play">
             <span id="ttsPlayIcon">🔊</span>
-            <span id="ttsPlayLabel">Read Me the Report</span>
+            <span id="ttsPlayLabel" data-i18n="tts_read_btn">Read Me the Report</span>
           </button>
-          <button id="ttsStopBtn" class="btn btn-secondary btn-sm" disabled>⏹ Stop</button>
+          <button id="ttsStopBtn" class="btn btn-secondary btn-sm" disabled data-i18n="tts_stop_btn">⏹ Stop</button>
           <div class="tts-status-box">
-            <div class="tts-status-title" id="ttsStatusTitle">Audio Briefing Ready — gemini-3.8-flash-tts (Executive Summary + Recommendations)</div>
+            <div class="tts-status-title" id="ttsStatusTitle" data-i18n="tts_ready_status">Audio Briefing Ready — gemini-3.8-flash-tts (Executive Summary + Recommendations)</div>
             <div class="tts-progress-track">
               <div class="tts-progress-fill" id="ttsProgressFill" style="width: 0%;"></div>
             </div>
@@ -269,7 +317,7 @@
         </div>
         <div class="tts-right">
           <label class="tts-ctrl-label">
-            Voice Model
+            <span data-i18n="tts_voice_label">Voice Model</span>
             <select id="ttsVoiceSelect" class="compact-select">
               <option value="Kore" selected>gemini-3.8-flash-tts • Kore (Executive Female)</option>
               <option value="Charon">gemini-3.8-flash-tts • Charon (Executive Male)</option>
@@ -279,7 +327,7 @@
             </select>
           </label>
           <label class="tts-ctrl-label">
-            Speed
+            <span data-i18n="tts_speed_label">Speed</span>
             <select id="ttsRateSelect" class="compact-select">
               <option value="1.0" selected>1.0x</option>
               <option value="1.08">1.1x</option>
@@ -297,8 +345,8 @@
           <div class="narrative-col-header">
             <span class="narrative-step-pill">A</span>
             <div>
-              <h3>Executive Summary — 5 Most Important Insights</h3>
-              <p class="muted">Generated from live Discovery Engine, Vertex AI &amp; Cloud Monitoring metrics</p>
+              <h3 data-i18n="narrative_col_a_title">Executive Summary — 5 Most Important Insights</h3>
+              <p class="muted" data-i18n="narrative_col_a_sub">Generated from live Discovery Engine, Vertex AI &amp; Cloud Monitoring metrics</p>
             </div>
           </div>
           <div id="executiveBulletsList" class="exec-bullets-list"></div>
@@ -309,8 +357,8 @@
           <div class="narrative-col-header">
             <span class="narrative-step-pill pill-teal">B</span>
             <div>
-              <h3>Recommendations for Your Environment</h3>
-              <p class="muted">Prioritized engineering &amp; FinOps actions tailored to <code id="recProjectCode">genai-demos-avr-2024</code></p>
+              <h3 data-i18n="narrative_col_b_title">Recommendations for Your Environment</h3>
+              <p class="muted"><span data-i18n="narrative_col_b_sub">Prioritized engineering &amp; FinOps actions tailored to</span> <code id="recProjectCode">genai-demos-avr-2024</code></p>
             </div>
           </div>
           <div id="environmentRecsList" class="env-recs-list"></div>
@@ -318,23 +366,23 @@
       </div>
     </section>
 
-    <!-- 3. Google-Palette Workstreams & Deliverables Paired Bar Charts (Placed Immediately After Executive Summary) -->
+    <!-- 3. Google-Palette Workstreams & Deliverables Paired Bar Charts -->
     <section id="section-charts" class="charts-grid-2">
       <!-- Workstreams Card -->
       <div class="card">
         <div class="card-header">
           <div>
-            <h2>What Gemini Enterprise Is Used For (Workstreams)</h2>
-            <p class="card-sub">Inferred dynamically from registered agent descriptions, types &amp; activity</p>
+            <h2 data-i18n="workstreams_title">What Gemini Enterprise Is Used For (Workstreams)</h2>
+            <p class="card-sub" data-i18n="workstreams_sub">Inferred dynamically from registered agent descriptions, types &amp; activity</p>
           </div>
           <div class="chart-controls">
             <div class="legend-inline">
-              <span class="legend-item"><i class="swatch swatch-blue"></i>% of sessions</span>
-              <span class="legend-item"><i class="swatch swatch-teal"></i>% of variable spend</span>
+              <span class="legend-item"><i class="swatch swatch-blue"></i><span data-i18n="legend_pct_sessions">% of sessions</span></span>
+              <span class="legend-item"><i class="swatch swatch-teal"></i><span data-i18n="legend_pct_spend">% of variable spend</span></span>
             </div>
             <select id="workstreamsSortSelect" class="compact-select" aria-label="Sort workstreams">
-              <option value="spend">Sort: % of spend</option>
-              <option value="sessions">Sort: % of sessions</option>
+              <option value="spend" data-i18n="sort_spend">Sort: % of spend</option>
+              <option value="sessions" data-i18n="sort_sessions">Sort: % of sessions</option>
             </select>
           </div>
         </div>
@@ -345,17 +393,17 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <h2>Deliverables Produced by Agent Portfolio</h2>
-            <p class="card-sub">Grouped by output modality across Low-Code, ADK, Skill, Workflow &amp; A2A agents</p>
+            <h2 data-i18n="deliverables_title">Deliverables Produced by Agent Portfolio</h2>
+            <p class="card-sub" data-i18n="deliverables_sub">Grouped by output modality across Low-Code, ADK, Skill, Workflow &amp; A2A agents</p>
           </div>
           <div class="chart-controls">
             <div class="legend-inline">
-              <span class="legend-item"><i class="swatch swatch-blue"></i>% of sessions</span>
-              <span class="legend-item"><i class="swatch swatch-teal"></i>% of variable spend</span>
+              <span class="legend-item"><i class="swatch swatch-blue"></i><span data-i18n="legend_pct_sessions">% of sessions</span></span>
+              <span class="legend-item"><i class="swatch swatch-teal"></i><span data-i18n="legend_pct_spend">% of variable spend</span></span>
             </div>
             <select id="deliverablesSortSelect" class="compact-select" aria-label="Sort deliverables">
-              <option value="spend">Sort: % of spend</option>
-              <option value="sessions">Sort: % of sessions</option>
+              <option value="spend" data-i18n="sort_spend">Sort: % of spend</option>
+              <option value="sessions" data-i18n="sort_sessions">Sort: % of sessions</option>
             </select>
           </div>
         </div>
@@ -368,44 +416,44 @@
       <div class="card-header">
         <div>
           <div class="narrative-title-row">
-            <h2>Agent Platform Model Billing &amp; Token Consumption</h2>
+            <h2 data-i18n="billing_title">Agent Platform Model Billing &amp; Token Consumption</h2>
             <span id="billingAccountBadge" class="project-pill">Billing Account: Loading...</span>
             <span id="billingStatusBadge" class="status-pill status-active">Billing Enabled</span>
           </div>
-          <p class="card-sub">
-            Live 30-day token telemetry from <code>aiplatform.googleapis.com/publisher/online_serving/token_count</code> &amp; <code>model_invocation_count</code> attributed per Model, per Agent &amp; per Project/Engine
+          <p class="card-sub" data-i18n="billing_sub">
+            Live 30-day token telemetry from aiplatform.googleapis.com/publisher/online_serving/token_count &amp; model_invocation_count attributed per Model, per Agent &amp; per Project/Engine
           </p>
         </div>
         <div class="table-toolbar">
           <div class="segmented-tabs" id="tokenBillingTabs">
-            <button class="seg-btn active" data-billing-tab="MODEL">Per Model (<span id="tbCountModels">0</span>)</button>
-            <button class="seg-btn" data-billing-tab="AGENT">Per Agent (<span id="tbCountAgents">0</span>)</button>
-            <button class="seg-btn" data-billing-tab="PROJECT">Per Project &amp; App (<span id="tbCountEngines">0</span>)</button>
+            <button class="seg-btn active" data-billing-tab="MODEL"><span data-i18n="billing_tab_model">Per Model</span> (<span id="tbCountModels">0</span>)</button>
+            <button class="seg-btn" data-billing-tab="AGENT"><span data-i18n="billing_tab_agent">Per Agent</span> (<span id="tbCountAgents">0</span>)</button>
+            <button class="seg-btn" data-billing-tab="PROJECT"><span data-i18n="billing_tab_project">Per Project &amp; App</span> (<span id="tbCountEngines">0</span>)</button>
           </div>
-          <input id="tokenBillingSearch" type="search" class="search-input" placeholder="Search model, agent, or engine..." />
+          <input id="tokenBillingSearch" type="search" class="search-input" data-i18n-placeholder="billing_search_placeholder" placeholder="Search model, agent, or engine..." />
         </div>
       </div>
 
       <!-- Summary KPI Strip for Model Token Billing -->
       <div class="token-summary-strip">
         <div class="token-stat-pill">
-          <span class="token-stat-label">Total Live Tokens (30d)</span>
+          <span class="token-stat-label" data-i18n="tb_total_tokens_label">Total Live Tokens (30d)</span>
           <strong id="tbTotalTokens">--</strong>
         </div>
         <div class="token-stat-pill">
-          <span class="token-stat-label">Input Tokens (Prompt/Context)</span>
+          <span class="token-stat-label" data-i18n="tb_input_tokens_label">Input Tokens (Prompt/Context)</span>
           <strong id="tbInputTokens" class="text-blue">--</strong>
         </div>
         <div class="token-stat-pill">
-          <span class="token-stat-label">Output Tokens (Completion)</span>
+          <span class="token-stat-label" data-i18n="tb_output_tokens_label">Output Tokens (Completion)</span>
           <strong id="tbOutputTokens" class="text-teal">--</strong>
         </div>
         <div class="token-stat-pill">
-          <span class="token-stat-label">Live Model Invocations</span>
+          <span class="token-stat-label" data-i18n="tb_invocations_label">Live Model Invocations</span>
           <strong id="tbInvocations">--</strong>
         </div>
         <div class="token-stat-pill">
-          <span class="token-stat-label">Live Model Token Spend</span>
+          <span class="token-stat-label" data-i18n="tb_spend_label">Live Model Token Spend</span>
           <strong id="tbModelSpend" class="text-green">--</strong>
         </div>
       </div>
@@ -413,10 +461,10 @@
       <!-- Visual Token Distribution Bar Chart across Top Models -->
       <div class="model-bars-section">
         <div class="model-bars-header">
-          <span class="drawer-section-title" style="margin-bottom: 0;">LIVE TOKEN DISTRIBUTION BY GEMINI MODEL (INPUT VS. OUTPUT TOKENS)</span>
+          <span class="drawer-section-title" style="margin-bottom: 0;" data-i18n="tb_bars_title">LIVE TOKEN DISTRIBUTION BY GEMINI MODEL (INPUT VS. OUTPUT TOKENS)</span>
           <div class="legend-inline">
-            <span class="legend-item"><i class="swatch swatch-blue"></i>Input Tokens</span>
-            <span class="legend-item"><i class="swatch swatch-teal"></i>Output Tokens</span>
+            <span class="legend-item"><i class="swatch swatch-blue"></i><span data-i18n="legend_input_tokens">Input Tokens</span></span>
+            <span class="legend-item"><i class="swatch swatch-teal"></i><span data-i18n="legend_output_tokens">Output Tokens</span></span>
           </div>
         </div>
         <div id="modelTokenBarsBox" class="paired-bars-list"></div>
@@ -427,17 +475,17 @@
         <table class="gcp-table">
           <thead>
             <tr>
-              <th>Model ID (PublisherModel)</th>
-              <th>Model Tier</th>
-              <th>Location</th>
-              <th>Invocations (30d)</th>
-              <th>Input Tokens</th>
-              <th>Output Tokens</th>
-              <th>Total Tokens &darr;</th>
-              <th>% Share</th>
-              <th>Linked GE Agents</th>
-              <th>Rate ($/1M In / Out)</th>
-              <th>Token Spend ($)</th>
+              <th data-i18n="th_model_id">Model ID (PublisherModel)</th>
+              <th data-i18n="th_model_tier">Model Tier</th>
+              <th data-i18n="th_location">Location</th>
+              <th data-i18n="th_invocations_30d">Invocations (30d)</th>
+              <th data-i18n="th_input_tokens">Input Tokens</th>
+              <th data-i18n="th_output_tokens">Output Tokens</th>
+              <th data-i18n="th_total_tokens">Total Tokens &darr;</th>
+              <th data-i18n="th_pct_share">% Share</th>
+              <th data-i18n="th_linked_agents">Linked GE Agents</th>
+              <th data-i18n="th_rate_1m">Rate ($/1M In / Out)</th>
+              <th data-i18n="th_token_spend">Token Spend ($)</th>
             </tr>
           </thead>
           <tbody id="billingModelTableBody"></tbody>
@@ -449,17 +497,17 @@
         <table class="gcp-table">
           <thead>
             <tr>
-              <th>Agent Display Name</th>
-              <th>App / Engine</th>
-              <th>Architecture</th>
-              <th>Underlying Model</th>
-              <th>State</th>
-              <th>Sessions (30d)</th>
-              <th>Input Tokens</th>
-              <th>Output Tokens</th>
-              <th>Total Tokens &darr;</th>
-              <th>Token Spend ($)</th>
-              <th>Total Agent Spend ($)</th>
+              <th data-i18n="th_agent_name">Agent Display Name</th>
+              <th data-i18n="th_app_engine">App / Engine</th>
+              <th data-i18n="th_architecture">Architecture</th>
+              <th data-i18n="th_underlying_model">Underlying Model</th>
+              <th data-i18n="th_state">State</th>
+              <th data-i18n="th_sessions_30d">Sessions (30d)</th>
+              <th data-i18n="th_input_tokens">Input Tokens</th>
+              <th data-i18n="th_output_tokens">Output Tokens</th>
+              <th data-i18n="th_total_tokens">Total Tokens &darr;</th>
+              <th data-i18n="th_token_spend">Token Spend ($)</th>
+              <th data-i18n="th_total_agent_spend">Total Agent Spend ($)</th>
             </tr>
           </thead>
           <tbody id="billingAgentTableBody"></tbody>
@@ -471,17 +519,17 @@
         <table class="gcp-table">
           <thead>
             <tr>
-              <th>GCP Project ID</th>
-              <th>Gemini Enterprise App / Engine</th>
-              <th>Registered Agents</th>
-              <th>Primary Models Used</th>
-              <th>Sessions (30d)</th>
-              <th>Input Tokens</th>
-              <th>Output Tokens</th>
-              <th>Total Tokens &darr;</th>
-              <th>% Token Share</th>
-              <th>Token Spend ($)</th>
-              <th>Total App Spend ($)</th>
+              <th data-i18n="th_gcp_project">GCP Project ID</th>
+              <th data-i18n="th_ge_app_engine">Gemini Enterprise App / Engine</th>
+              <th data-i18n="th_reg_agents">Registered Agents</th>
+              <th data-i18n="th_primary_models">Primary Models Used</th>
+              <th data-i18n="th_sessions_30d">Sessions (30d)</th>
+              <th data-i18n="th_input_tokens">Input Tokens</th>
+              <th data-i18n="th_output_tokens">Output Tokens</th>
+              <th data-i18n="th_total_tokens">Total Tokens &darr;</th>
+              <th data-i18n="th_pct_token_share">% Token Share</th>
+              <th data-i18n="th_token_spend">Token Spend ($)</th>
+              <th data-i18n="th_total_app_spend">Total App Spend ($)</th>
             </tr>
           </thead>
           <tbody id="billingProjectTableBody"></tbody>
@@ -489,26 +537,26 @@
       </div>
     </section>
 
-    <!-- 5. Interactive ReactFlow Data & Agent Lineage Graph — All 122 Agents -->
+    <!-- 5. Interactive ReactFlow Data & Agent Lineage Graph -->
     <section id="section-lineage-graph" class="card">
       <div class="card-header">
         <div>
           <div class="narrative-title-row">
-            <h2>Interactive Data Store, Agent &amp; Reasoning Engine Lineage Graph</h2>
-            <span id="lineageTotalCountBadge" class="status-pill status-active">All 122 Agents Loaded</span>
+            <h2 data-i18n="lineage_title">Interactive Data Store, Agent &amp; Reasoning Engine Lineage Graph</h2>
+            <span id="lineageTotalCountBadge" class="status-pill status-active">All Agents Loaded</span>
           </div>
-          <p class="card-sub">
-            Complete 4-tier topology linking all Connected Data Stores &rarr; Gemini Enterprise Apps &rarr; All 122 Registered Agents &rarr; 43 Vertex AI Reasoning Engines
+          <p class="card-sub" data-i18n="lineage_sub">
+            Complete 4-tier topology linking all Connected Data Stores &rarr; Gemini Enterprise Apps &rarr; Registered Agents &rarr; Vertex AI Reasoning Engines
           </p>
         </div>
         <div class="lineage-controls">
           <select id="lineageLayoutSelect" class="compact-select" aria-label="Lineage layout mode">
-            <option value="MATRIX" selected>View: All 122 Agents (Multi-Column Matrix)</option>
+            <option value="MATRIX" selected>View: All Agents (Multi-Column Matrix)</option>
             <option value="PAGINATED">View: Paginated Stream (20 Agents / Page)</option>
             <option value="ADK_ONLY">View: ADK &amp; Error Agents Focus</option>
           </select>
           <select id="lineageSubtypeSelect" class="compact-select" aria-label="Filter lineage by agent subtype">
-            <option value="ALL">All Agent Types (122)</option>
+            <option value="ALL">All Agent Types</option>
             <option value="Low-Code">Low-Code Agents</option>
             <option value="ADK">ADK (Reasoning Engine)</option>
             <option value="Managed">Google-Made / Core</option>
@@ -516,7 +564,7 @@
             <option value="Workflow">Workflow Agents</option>
             <option value="A2A">A2A Agents</option>
           </select>
-          <input id="lineageSearchInput" type="search" class="search-input lineage-search" placeholder="Search 122 agents or stores..." />
+          <input id="lineageSearchInput" type="search" class="search-input lineage-search" data-i18n-placeholder="lineage_search_placeholder" placeholder="Search agents or stores..." />
           <div id="lineagePagerBox" class="lineage-pager hidden">
             <button id="lineagePrevPageBtn" class="btn btn-secondary btn-sm">&larr; Prev</button>
             <span id="lineagePageLabel" class="lineage-page-label">1 / 7</span>
@@ -524,35 +572,35 @@
           </div>
           <button id="lineageZoomInBtn" class="btn btn-secondary btn-sm" title="Zoom In">+</button>
           <button id="lineageZoomOutBtn" class="btn btn-secondary btn-sm" title="Zoom Out">&minus;</button>
-          <button id="lineageFitViewBtn" class="btn btn-secondary btn-sm" title="Fit Readable Width">Fit Width</button>
-          <button id="lineageFitAllBtn" class="btn btn-secondary btn-sm" title="Bird's-Eye Fit All Nodes">Fit All</button>
+          <button id="lineageFitViewBtn" class="btn btn-secondary btn-sm" title="Fit Readable Width" data-i18n="lineage_fit_width">Fit Width</button>
+          <button id="lineageFitAllBtn" class="btn btn-secondary btn-sm" title="Bird's-Eye Fit All Nodes" data-i18n="lineage_fit_all">Fit All</button>
           <button id="lineageToggleAnimBtn" class="btn btn-secondary btn-sm">⚡ Live Flow: ON</button>
         </div>
       </div>
 
       <div class="lineage-tier-bar">
-        <div class="tier-pill"><span class="tier-dot dot-tier-2"></span>1. Connected Data Stores &amp; MCP (<span id="tierCountDs">29</span>)</div>
-        <div class="tier-pill"><span class="tier-dot dot-tier-1"></span>2. Gemini Enterprise Apps (<span id="tierCountEng">19</span>)</div>
-        <div class="tier-pill"><span class="tier-dot dot-tier-3"></span>3. Registered Agents (<span id="tierCountAg">122</span>)</div>
-        <div class="tier-pill"><span class="tier-dot dot-tier-4"></span>4. Vertex AI Reasoning Engines (<span id="tierCountRe">43</span>)</div>
+        <div class="tier-pill"><span class="tier-dot dot-tier-2"></span><span data-i18n="tier_1_label">1. Connected Data Stores &amp; MCP</span> (<span id="tierCountDs">0</span>)</div>
+        <div class="tier-pill"><span class="tier-dot dot-tier-1"></span><span data-i18n="tier_2_label">2. Gemini Enterprise Apps</span> (<span id="tierCountEng">0</span>)</div>
+        <div class="tier-pill"><span class="tier-dot dot-tier-3"></span><span data-i18n="tier_3_label">3. Registered Agents</span> (<span id="tierCountAg">0</span>)</div>
+        <div class="tier-pill"><span class="tier-dot dot-tier-4"></span><span data-i18n="tier_4_label">4. Vertex AI Reasoning Engines</span> (<span id="tierCountRe">0</span>)</div>
       </div>
 
       <div class="lineage-workspace">
         <div id="reactflowLineageContainer" class="lineage-canvas-wrap"></div>
         <aside class="lineage-inspector">
-          <div class="inspector-eyebrow">NODE INSPECTOR</div>
+          <div class="inspector-eyebrow" data-i18n="inspector_eyebrow">NODE INSPECTOR</div>
           <h3 id="inspTitle">Select a Node</h3>
           <div id="inspSubtitle" class="inspector-sub">Click any node in the graph</div>
           <div class="inspector-badge-row">
             <span id="inspBadge" class="status-pill status-active">HEALTHY</span>
           </div>
           <div class="inspector-kv">
-            <div><span class="kv-label">Resource Type &amp; Model</span><strong id="inspCategory">-</strong></div>
-            <div><span class="kv-label">Live Telemetry</span><strong id="inspMetrics">-</strong></div>
-            <div><span class="kv-label">Resource Path</span><code id="inspResource">-</code></div>
+            <div><span class="kv-label" data-i18n="inspector_type_label">Resource Type &amp; Model</span><strong id="inspCategory">-</strong></div>
+            <div><span class="kv-label" data-i18n="inspector_telemetry_label">Live Telemetry</span><strong id="inspMetrics">-</strong></div>
+            <div><span class="kv-label" data-i18n="inspector_path_label">Resource Path</span><code id="inspResource">-</code></div>
           </div>
           <p id="inspDetails" class="inspector-desc"></p>
-          <div class="inspector-edges-title">Connected Lineage Edges (<span id="inspEdgeCount">0</span>)</div>
+          <div class="inspector-edges-title"><span data-i18n="inspector_edges_label">Connected Lineage Edges</span> (<span id="inspEdgeCount">0</span>)</div>
           <div id="inspEdgesList" class="inspector-edges-list"></div>
         </aside>
       </div>
@@ -562,17 +610,17 @@
     <section id="section-datastores" class="card">
       <div class="card-header">
         <div>
-          <h2>Connected Data Stores &amp; MCP Connectors</h2>
-          <p class="card-sub">Live from <code>collections/default_collection/dataStores</code> &amp; <code>collections/{id}/dataConnector</code></p>
+          <h2 data-i18n="datastores_title">Connected Data Stores &amp; MCP Connectors</h2>
+          <p class="card-sub" data-i18n="datastores_sub">Live from collections/default_collection/dataStores &amp; collections/{id}/dataConnector</p>
         </div>
         <div class="table-toolbar">
           <div class="segmented-tabs" id="dsFilterTabs">
-            <button class="seg-btn active" data-ds-filter="ALL">All (<span id="dsCountAll">0</span>)</button>
-            <button class="seg-btn" data-ds-filter="ACTIVE">Active (<span id="dsCountActive">0</span>)</button>
-            <button class="seg-btn" data-ds-filter="MCP">Custom MCP (<span id="dsCountMcp">0</span>)</button>
-            <button class="seg-btn" data-ds-filter="ERROR">Errors (<span id="dsCountError">0</span>)</button>
+            <button class="seg-btn active" data-ds-filter="ALL"><span data-i18n="filter_all">All</span> (<span id="dsCountAll">0</span>)</button>
+            <button class="seg-btn" data-ds-filter="ACTIVE"><span data-i18n="filter_active">Active</span> (<span id="dsCountActive">0</span>)</button>
+            <button class="seg-btn" data-ds-filter="MCP"><span data-i18n="filter_mcp">Custom MCP</span> (<span id="dsCountMcp">0</span>)</button>
+            <button class="seg-btn" data-ds-filter="ERROR"><span data-i18n="filter_errors">Errors</span> (<span id="dsCountError">0</span>)</button>
           </div>
-          <input id="dsSearchInput" type="search" class="search-input" placeholder="Filter data stores by name or type..." />
+          <input id="dsSearchInput" type="search" class="search-input" data-i18n-placeholder="ds_search_placeholder" placeholder="Filter data stores by name or type..." />
         </div>
       </div>
 
@@ -580,13 +628,13 @@
         <table class="gcp-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Last data sync</th>
-              <th>Last update</th>
-              <th>Date created</th>
-              <th>Connected App / Engine</th>
+              <th data-i18n="th_ds_name">Name</th>
+              <th data-i18n="th_ds_type">Type</th>
+              <th data-i18n="th_ds_status">Status</th>
+              <th data-i18n="th_ds_sync">Last data sync</th>
+              <th data-i18n="th_ds_update">Last update</th>
+              <th data-i18n="th_ds_created">Date created</th>
+              <th data-i18n="th_ds_engine">Connected App / Engine</th>
             </tr>
           </thead>
           <tbody id="datastoresTableBody"></tbody>
@@ -594,27 +642,27 @@
       </div>
     </section>
 
-    <!-- 7. Registered Agents Table (All 122 Agents with Model & Token Columns) -->
+    <!-- 7. Registered Agents Table -->
     <section id="section-agents" class="card">
       <div class="card-header">
         <div>
-          <h2>Registered Agents Inventory</h2>
-          <p class="card-sub">Full paginated inventory from <code>engines/{engine}/assistants/default_assistant/agents</code> with model &amp; token attribution</p>
+          <h2 data-i18n="agents_title">Registered Agents Inventory</h2>
+          <p class="card-sub" data-i18n="agents_sub">Full paginated inventory from engines/{engine}/assistants/default_assistant/agents with model &amp; token attribution</p>
         </div>
         <div class="table-toolbar">
           <div class="segmented-tabs" id="agentOwnerTabs">
-            <button class="seg-btn active" data-owner="ALL">All (<span id="agCountAll">0</span>)</button>
-            <button class="seg-btn" data-owner="Google-made">Google-made (<span id="agCountGoogle">0</span>)</button>
-            <button class="seg-btn" data-owner="Our agents">Our agents (<span id="agCountOurs">0</span>)</button>
+            <button class="seg-btn active" data-owner="ALL"><span data-i18n="filter_all">All</span> (<span id="agCountAll">0</span>)</button>
+            <button class="seg-btn" data-owner="Google-made"><span data-i18n="filter_google_made">Google-made</span> (<span id="agCountGoogle">0</span>)</button>
+            <button class="seg-btn" data-owner="Our agents"><span data-i18n="filter_our_agents">Our agents</span> (<span id="agCountOurs">0</span>)</button>
           </div>
           <select id="agentStateSelect" class="compact-select" aria-label="Filter by agent state">
-            <option value="ALL">All States</option>
-            <option value="ENABLED">Enabled</option>
-            <option value="PRIVATE">Private</option>
-            <option value="DISABLED">Disabled</option>
-            <option value="ERRORS">Validation Errors</option>
+            <option value="ALL" data-i18n="state_all">All States</option>
+            <option value="ENABLED" data-i18n="state_enabled">Enabled</option>
+            <option value="PRIVATE" data-i18n="state_private">Private</option>
+            <option value="DISABLED" data-i18n="state_disabled">Disabled</option>
+            <option value="ERRORS" data-i18n="state_errors">Validation Errors</option>
           </select>
-          <input id="agentSearchInput" type="search" class="search-input" placeholder="Filter by display name, model, ID, or type..." />
+          <input id="agentSearchInput" type="search" class="search-input" data-i18n-placeholder="ag_search_placeholder" placeholder="Filter by display name, model, ID, or type..." />
         </div>
       </div>
 
@@ -622,15 +670,15 @@
         <table class="gcp-table">
           <thead>
             <tr>
-              <th>Display name</th>
-              <th>Agent ID</th>
-              <th>Agent type</th>
-              <th>Model</th>
-              <th>Agent state</th>
-              <th>App / Engine</th>
-              <th>Tokens (30d)</th>
-              <th>Last updated &darr;</th>
-              <th>Est. Spend</th>
+              <th data-i18n="th_ag_display_name">Display name</th>
+              <th data-i18n="th_ag_id">Agent ID</th>
+              <th data-i18n="th_ag_type">Agent type</th>
+              <th data-i18n="th_ag_model">Model</th>
+              <th data-i18n="th_ag_state">Agent state</th>
+              <th data-i18n="th_app_engine">App / Engine</th>
+              <th data-i18n="th_ag_tokens">Tokens (30d)</th>
+              <th data-i18n="th_ag_updated">Last updated &darr;</th>
+              <th data-i18n="th_ag_spend">Est. Spend</th>
             </tr>
           </thead>
           <tbody id="agentsTableBody"></tbody>
@@ -644,8 +692,8 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <h2>Live API Connector &amp; Agent Frictions</h2>
-            <p class="card-sub">Detected directly from <code>dataConnector.errors</code>, <code>validationErrors</code> &amp; <code>userLicenses</code></p>
+            <h2 data-i18n="frictions_title">Live API Connector &amp; Agent Frictions</h2>
+            <p class="card-sub" data-i18n="frictions_sub">Detected directly from dataConnector.errors, validationErrors &amp; userLicenses</p>
           </div>
           <span id="frictionCountBadge" class="status-pill status-error">0 Issues</span>
         </div>
@@ -656,19 +704,19 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <h2>Licensed Principals (<code>default_user_store</code>)</h2>
-            <p class="card-sub">Live from Discovery Engine <code>userLicenses</code> API (masked by default)</p>
+            <h2 data-i18n="licenses_title">Licensed Principals (default_user_store)</h2>
+            <p class="card-sub" data-i18n="licenses_sub">Live from Discovery Engine userLicenses API (masked by default)</p>
           </div>
-          <button id="togglePiiBtn" class="btn btn-secondary btn-sm">Reveal Identities</button>
+          <button id="togglePiiBtn" class="btn btn-secondary btn-sm" data-i18n="reveal_identities_btn">Reveal Identities</button>
         </div>
         <div class="table-scroll">
           <table class="gcp-table">
             <thead>
               <tr>
-                <th>Principal</th>
-                <th>State</th>
-                <th>License Tier</th>
-                <th>Last Login</th>
+                <th data-i18n="th_lic_principal">Principal</th>
+                <th data-i18n="th_lic_state">State</th>
+                <th data-i18n="th_lic_tier">License Tier</th>
+                <th data-i18n="th_lic_login">Last Login</th>
               </tr>
             </thead>
             <tbody id="usersTableBody"></tbody>
@@ -679,24 +727,24 @@
     </div><!-- /#mainTabOverview -->
 
     <!-- =================================================================== -->
-    <!-- TAB 2: TELEMETRÍA Y ADOPCIÓN (ADMIN) - 6 PREGUNTAS DEL ADMINISTRADOR -->
+    <!-- TAB 2: TELEMETRY & ADOPTION (ADMIN) - 6 DIMENSIONS                  -->
     <!-- =================================================================== -->
     <div id="mainTabAdoption" class="main-tab-panel hidden">
       <section id="section-admin-adoption" class="card adoption-hero-card">
         <div class="adoption-hero-header">
           <div>
             <div class="narrative-eyebrow">
-              <span class="ai-sparkle-badge">ADMIN TELEMETRY &amp; ADOPTION</span>
-              <span id="adoptionWindowPill" class="model-pill">Ventana: Últimos 30 días</span>
+              <span class="ai-sparkle-badge" data-i18n="adopt_eyebrow_badge">ADMIN TELEMETRY &amp; ADOPTION</span>
+              <span id="adoptionWindowPill" class="model-pill">Window: Last 30 days</span>
               <span class="tts-voice-pill">100% Live GCP APIs</span>
             </div>
-            <h2>Telemetría de Adopción, Uso de Licencias e Inteligencia de Prompts</h2>
-            <p class="card-sub">Respuestas en tiempo real a las 6 preguntas clave del Administrador sobre usuarios activos, aplicaciones, agentes, asientos inactivos, ecosistema e intención de prompts.</p>
+            <h2 data-i18n="adopt_hero_title">Adoption Telemetry, License Utilization &amp; Prompt Intelligence</h2>
+            <p class="card-sub" data-i18n="adopt_hero_sub">Real-time answers across the 6 Admin Dimensions covering active users, top applications, top agents, dormant seats, ecosystem capabilities, and prompt intent.</p>
           </div>
           <div class="adoption-controls-bar">
-            <div class="adoption-days-group" role="group" aria-label="Ventana de tiempo en días">
-              <span class="control-label">Ventana (X días):</span>
-              <button type="button" class="chip-btn adoption-day-btn" data-days="1">Hoy (1d)</button>
+            <div class="adoption-days-group" role="group" aria-label="Time window in days">
+              <span class="control-label" data-i18n="adopt_window_label">Window (X days):</span>
+              <button type="button" class="chip-btn adoption-day-btn" data-days="1" data-i18n="adopt_day_1">Today (1d)</button>
               <button type="button" class="chip-btn adoption-day-btn" data-days="7">7d</button>
               <button type="button" class="chip-btn adoption-day-btn" data-days="14">14d</button>
               <button type="button" class="chip-btn adoption-day-btn active" data-days="30">30d</button>
@@ -704,12 +752,12 @@
               <button type="button" class="chip-btn adoption-day-btn" data-days="180">180d</button>
               <button type="button" class="chip-btn adoption-day-btn" data-days="365">365d</button>
               <div class="adoption-custom-days">
-                <input type="number" id="adoptionCustomDaysInput" min="1" max="365" placeholder="X días" aria-label="Días personalizados" />
-                <button type="button" id="adoptionApplyDaysBtn" class="btn btn-secondary btn-sm">Aplicar</button>
+                <input type="number" id="adoptionCustomDaysInput" min="1" max="365" data-i18n-placeholder="adopt_custom_days_placeholder" placeholder="X days" aria-label="Custom days" />
+                <button type="button" id="adoptionApplyDaysBtn" class="btn btn-secondary btn-sm" data-i18n="adopt_apply_btn">Apply</button>
               </div>
             </div>
             <button type="button" id="adoptionPrivacyToggleBtn" class="btn btn-secondary btn-sm">
-              🔒 Vista Enmascarada (Clic para Admin)
+              🔒 Masked View (Click for Admin)
             </button>
           </div>
         </div>
@@ -718,65 +766,65 @@
         <div class="kpi-grid adoption-kpi-grid">
           <div class="kpi-card">
             <div class="kpi-top">
-              <span class="kpi-label">Usuarios Activos Hoy (24h)</span>
+              <span class="kpi-label" data-i18n="adopt_kpi_today_label">Active Users Today (24h)</span>
               <span class="kpi-dot dot-blue"></span>
             </div>
             <div class="kpi-value" id="adoptKpiTodayUsers">—</div>
-            <div class="kpi-sub" id="adoptKpiTodaySub">— sesiones / — consultas hoy</div>
+            <div class="kpi-sub" id="adoptKpiTodaySub">— sessions / — queries today</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-top">
-              <span class="kpi-label" id="adoptKpiWindowUsersLabel">Usuarios Activos (30d)</span>
+              <span class="kpi-label" id="adoptKpiWindowUsersLabel">Active Users (30d)</span>
               <span class="kpi-dot dot-green"></span>
             </div>
             <div class="kpi-value" id="adoptKpiWindowUsers">—</div>
-            <div class="kpi-sub" id="adoptKpiWindowSub">— sesiones / — turnos en ventana</div>
+            <div class="kpi-sub" id="adoptKpiWindowSub">— sessions / — turns in window</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-top">
-              <span class="kpi-label">Tasa de Adopción de Licencias</span>
-              <span class="kpi-dot dot-cyan"></span>
+              <span class="kpi-label" data-i18n="adopt_kpi_seat_rate_label">License Adoption Rate</span>
+              <span class="kpi-dot dot-blue"></span>
             </div>
             <div class="kpi-value" id="adoptKpiSeatRate">—%</div>
-            <div class="kpi-sub" id="adoptKpiSeatSub">— activos vs. — sin uso</div>
+            <div class="kpi-sub" id="adoptKpiSeatSub">— active vs. — unused</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-top">
-              <span class="kpi-label">Apps Activas / Total</span>
+              <span class="kpi-label" data-i18n="adopt_kpi_apps_label">Active Apps / Total</span>
               <span class="kpi-dot dot-yellow"></span>
             </div>
             <div class="kpi-value" id="adoptKpiActiveApps">—</div>
-            <div class="kpi-sub" id="adoptKpiActiveAppsSub">Motores con sesiones registradas</div>
+            <div class="kpi-sub" id="adoptKpiActiveAppsSub">Engines with recorded sessions</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-top">
-              <span class="kpi-label">Agentes Utilizados</span>
-              <span class="kpi-dot dot-purple"></span>
+              <span class="kpi-label" data-i18n="adopt_kpi_agents_label">Agents Used</span>
+              <span class="kpi-dot dot-red"></span>
             </div>
             <div class="kpi-value" id="adoptKpiActiveAgents">—</div>
-            <div class="kpi-sub" id="adoptKpiActiveAgentsSub">Agentes con actividad e invocaciones</div>
+            <div class="kpi-sub" id="adoptKpiActiveAgentsSub">Agents with active sessions</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-top">
-              <span class="kpi-label">Prompts de Trabajo (Laboral)</span>
+              <span class="kpi-label" data-i18n="adopt_kpi_work_label">Work-Related Prompts</span>
               <span class="kpi-dot dot-green"></span>
             </div>
             <div class="kpi-value" id="adoptKpiWorkRatio">—%</div>
-            <div class="kpi-sub" id="adoptKpiWorkSub">— laborales / — otros fines</div>
+            <div class="kpi-sub" id="adoptKpiWorkSub">— work / — other purposes</div>
           </div>
         </div>
       </section>
 
-      <!-- PREGUNTA 1: ¿Qué usuarios están usando Gemini Enterprise hoy? ¿Cuánto? ¿Y en los últimos X días? -->
+      <!-- DIMENSION 1: Active Users Today & Over Last X Days -->
       <section class="card adoption-question-card" id="adoption-q1">
         <div class="card-header">
           <div>
             <div class="question-badge-row">
-              <span class="question-number-pill">Pregunta 1</span>
-              <span class="table-badge">Identidades + Sesiones en Vivo</span>
+              <span class="question-number-pill" data-i18n="dim_1_badge">Dimension 1</span>
+              <span class="table-badge" data-i18n="dim_1_tag">Live Identities + Sessions</span>
             </div>
-            <h2>¿Qué usuarios están usando Gemini Enterprise hoy? ¿Cuánto? ¿Y en los últimos <span class="adopt-days-label">30</span> días?</h2>
-            <p class="card-sub">Desglose por usuario de inicios de sesión, sesiones conversacionales, consultas/turnos hoy y en la ventana de <span class="adopt-days-label">30</span> días, más curva diaria de actividad.</p>
+            <h2 id="dim1Heading"><span data-i18n="dim_1_title_prefix">Which users are using Gemini Enterprise today, how much, and over the last</span> <span class="adopt-days-label">30</span> <span data-i18n="dim_1_title_suffix">days?</span></h2>
+            <p class="card-sub"><span data-i18n="dim_1_sub_prefix">Per-user breakdown of logins, conversational sessions, queries/turns today and within the</span> <span class="adopt-days-label">30</span>-<span data-i18n="dim_1_sub_suffix">day window, plus daily activity curve.</span></p>
           </div>
         </div>
         <div class="charts-grid-2 adoption-q1-grid">
@@ -784,21 +832,21 @@
             <table class="gcp-table">
               <thead>
                 <tr>
-                  <th>Usuario / Principal</th>
-                  <th>Estado Hoy</th>
-                  <th>Consultas Hoy</th>
-                  <th>Sesiones (<span class="adopt-days-label">30</span>d)</th>
-                  <th>Turnos (<span class="adopt-days-label">30</span>d)</th>
-                  <th>Tokens Est.</th>
-                  <th>Apps Utilizados</th>
-                  <th>Última Actividad</th>
+                  <th data-i18n="th_q1_user">User / Principal</th>
+                  <th data-i18n="th_q1_status">Status Today</th>
+                  <th data-i18n="th_q1_today">Queries Today</th>
+                  <th><span data-i18n="th_sessions_word">Sessions</span> (<span class="adopt-days-label">30</span>d)</th>
+                  <th><span data-i18n="th_turns_word">Turns</span> (<span class="adopt-days-label">30</span>d)</th>
+                  <th data-i18n="th_q1_agents">Top Agents</th>
+                  <th data-i18n="th_q1_apps">Apps Used</th>
+                  <th data-i18n="th_q1_last">Last Activity</th>
                 </tr>
               </thead>
               <tbody id="adoptQ1UsersTableBody"></tbody>
             </table>
           </div>
           <div class="adoption-chart-box">
-            <div class="sub-card-title">Curva de Actividad Diaria (Sesiones y Consultas)</div>
+            <div class="sub-card-title" data-i18n="dim_1_chart_title">Daily Activity Curve (Sessions &amp; Queries)</div>
             <div class="chart-container chart-md">
               <canvas id="adoptDailyActivityChart"></canvas>
             </div>
@@ -806,18 +854,18 @@
         </div>
       </section>
 
-      <!-- PREGUNTAS 2 Y 3: Aplicaciones más utilizadas y Agentes más utilizados -->
+      <!-- DIMENSIONS 2 & 3: Most Used Applications & Most Used Agents -->
       <section class="charts-grid-2">
-        <!-- PREGUNTA 2 -->
+        <!-- DIMENSION 2 -->
         <div class="card adoption-question-card" id="adoption-q2">
           <div class="card-header">
             <div>
               <div class="question-badge-row">
-                <span class="question-number-pill">Pregunta 2</span>
-                <span class="table-badge">Motores Discovery Engine</span>
+                <span class="question-number-pill" data-i18n="dim_2_badge">Dimension 2</span>
+                <span class="table-badge" data-i18n="dim_2_tag">Discovery Engine Apps</span>
               </div>
-              <h2>¿Cuáles son las aplicaciones más utilizadas? ¿Por cuáles usuarios?</h2>
-              <p class="card-sub">Ranking de aplicaciones (Engines) por volumen de consultas/turnos, sesiones activas, agentes vinculados y usuarios que las operan.</p>
+              <h2 data-i18n="dim_2_title">Which applications are most used, and by which users?</h2>
+              <p class="card-sub" data-i18n="dim_2_sub">Ranking of applications (Engines) by query/turn volume, active sessions, linked agents, and operating users.</p>
             </div>
           </div>
           <div class="chart-container chart-sm">
@@ -827,11 +875,11 @@
             <table class="gcp-table">
               <thead>
                 <tr>
-                  <th>Aplicación (Engine)</th>
-                  <th>Sesiones (<span class="adopt-days-label">30</span>d)</th>
-                  <th>Turnos (<span class="adopt-days-label">30</span>d)</th>
-                  <th>Agentes</th>
-                  <th>Usuarios Activos</th>
+                  <th data-i18n="th_q2_app">Application (Engine)</th>
+                  <th><span data-i18n="th_sessions_word">Sessions</span> (<span class="adopt-days-label">30</span>d)</th>
+                  <th><span data-i18n="th_turns_word">Turns</span> (<span class="adopt-days-label">30</span>d)</th>
+                  <th data-i18n="th_q2_agents">Agents</th>
+                  <th data-i18n="th_q2_users">Active Users</th>
                 </tr>
               </thead>
               <tbody id="adoptQ2AppsTableBody"></tbody>
@@ -839,16 +887,16 @@
           </div>
         </div>
 
-        <!-- PREGUNTA 3 -->
+        <!-- DIMENSION 3 -->
         <div class="card adoption-question-card" id="adoption-q3">
           <div class="card-header">
             <div>
               <div class="question-badge-row">
-                <span class="question-number-pill">Pregunta 3</span>
-                <span class="table-badge">Assistants, ADK &amp; A2A Agents</span>
+                <span class="question-number-pill" data-i18n="dim_3_badge">Dimension 3</span>
+                <span class="table-badge" data-i18n="dim_3_tag">Assistants, ADK &amp; A2A Agents</span>
               </div>
-              <h2>¿Cuáles son los agentes más utilizados? ¿Por cuáles usuarios?</h2>
-              <p class="card-sub">Ranking de agentes registrados y asistentes por invocaciones/turnos, tokens consumidos, aplicación contenedora y usuarios asignados.</p>
+              <h2 data-i18n="dim_3_title">Which agents are most used, and by which users?</h2>
+              <p class="card-sub" data-i18n="dim_3_sub">Ranking of registered agents and assistants by invocations/turns, session share, host application, and assigned users.</p>
             </div>
           </div>
           <div class="chart-container chart-sm">
@@ -858,12 +906,12 @@
             <table class="gcp-table">
               <thead>
                 <tr>
-                  <th>Agente</th>
-                  <th>Tipo / Origen</th>
-                  <th>Aplicación</th>
-                  <th>Turnos</th>
-                  <th>Tokens</th>
-                  <th>Usuarios</th>
+                  <th data-i18n="th_q3_agent">Agent</th>
+                  <th data-i18n="th_q3_type">Type / Origin</th>
+                  <th data-i18n="th_q3_app">Application</th>
+                  <th data-i18n="th_turns_word">Turns</th>
+                  <th data-i18n="th_pct_share">% Share</th>
+                  <th data-i18n="th_q2_users">Users</th>
                 </tr>
               </thead>
               <tbody id="adoptQ3AgentsTableBody"></tbody>
@@ -872,32 +920,32 @@
         </div>
       </section>
 
-      <!-- PREGUNTAS 4 Y 5: Usuarios sin uso (Dormant) y Otras Capacidades de la Licencia -->
+      <!-- DIMENSIONS 4 & 5: Non-Users (Dormant Seats) & Other License Capabilities -->
       <section class="charts-grid-2">
-        <!-- PREGUNTA 4 -->
+        <!-- DIMENSION 4 -->
         <div class="card adoption-question-card" id="adoption-q4">
           <div class="card-header">
             <div>
               <div class="question-badge-row">
-                <span class="question-number-pill">Pregunta 4</span>
-                <span class="table-badge">Optimización de Licencias</span>
+                <span class="question-number-pill" data-i18n="dim_4_badge">Dimension 4</span>
+                <span class="table-badge" data-i18n="dim_4_tag">License Optimization</span>
               </div>
-              <h2>¿Quiénes no han estado utilizando Gemini Enterprise?</h2>
-              <p class="card-sub">Auditoría de asientos asignados sin actividad reciente o nunca utilizados, e impacto mensual de optimización/reasignación.</p>
+              <h2 data-i18n="dim_4_title">Who has not been using Gemini Enterprise?</h2>
+              <p class="card-sub" data-i18n="dim_4_sub">Audit of assigned seats with no recent activity or never logged in, plus monthly license reclamation savings.</p>
             </div>
-            <span id="adoptDormantSavingsBadge" class="status-pill status-warn">$0/mes recuperables</span>
+            <span id="adoptDormantSavingsBadge" class="status-pill status-warn">$0/mo reclaimable</span>
           </div>
           <div id="adoptQ4SummaryCallout" class="adoption-callout-box"></div>
           <div class="table-scroll">
             <table class="gcp-table">
               <thead>
                 <tr>
-                  <th>Usuario / Principal</th>
-                  <th>Estado de Licencia</th>
-                  <th>Días Inactivo</th>
-                  <th>Motivo / Diagnóstico</th>
-                  <th>Ahorro Est. / Mes</th>
-                  <th>Acción Recomendada</th>
+                  <th data-i18n="th_q1_user">User / Principal</th>
+                  <th data-i18n="th_q4_lic_state">License State</th>
+                  <th data-i18n="th_q4_inactive">Days Inactive</th>
+                  <th data-i18n="th_q4_reason">Cohort / Diagnosis</th>
+                  <th data-i18n="th_q4_savings">Est. Savings / Mo</th>
+                  <th data-i18n="th_q4_action">Recommended Action</th>
                 </tr>
               </thead>
               <tbody id="adoptQ4NonUsersTableBody"></tbody>
@@ -905,63 +953,63 @@
           </div>
         </div>
 
-        <!-- PREGUNTA 5 -->
+        <!-- DIMENSION 5 -->
         <div class="card adoption-question-card" id="adoption-q5">
           <div class="card-header">
             <div>
               <div class="question-badge-row">
-                <span class="question-number-pill">Pregunta 5</span>
-                <span class="table-badge">Ecosistema Google Cloud AI</span>
+                <span class="question-number-pill" data-i18n="dim_5_badge">Dimension 5</span>
+                <span class="table-badge" data-i18n="dim_5_tag">Google Cloud AI Ecosystem</span>
               </div>
-              <h2>¿Qué otras capacidades de la licencia están utilizando los usuarios?</h2>
-              <p class="card-sub">Telemetría en vivo de capacidades complementarias en el proyecto: Gemini Code Assist, Google Antigravity / ADK Agent Runtime, Síntesis de Voz y Búsqueda Conectada.</p>
+              <h2 data-i18n="dim_5_title">What other license capabilities are users utilizing?</h2>
+              <p class="card-sub" data-i18n="dim_5_sub">Live telemetry of complementary capabilities in the project: Gemini Code Assist, Google Antigravity / ADK Agent Runtime, Speech Synthesis, and Connected Search.</p>
             </div>
           </div>
           <div id="adoptQ5CapabilitiesGrid" class="capabilities-cards-grid"></div>
         </div>
       </section>
 
-      <!-- PREGUNTA 6: ¿Qué tipo de prompts están realizando los usuarios? ¿Fines de trabajo u otros fines? -->
+      <!-- DIMENSION 6: Prompt Types & Work vs. Non-Work Intent -->
       <section class="card adoption-question-card" id="adoption-q6">
         <div class="card-header">
           <div>
             <div class="question-badge-row">
-              <span class="question-number-pill">Pregunta 6</span>
-              <span class="table-badge">Clasificación Semántica &amp; DLP Guard</span>
+              <span class="question-number-pill" data-i18n="dim_6_badge">Dimension 6</span>
+              <span class="table-badge" data-i18n="dim_6_tag">Semantic Classification &amp; DLP Guard</span>
             </div>
-            <h2>¿Qué tipo de prompts están realizando los usuarios? ¿Están usando la aplicación para fines de trabajo u otros fines?</h2>
-            <p class="card-sub">Análisis en tiempo real de las consultas/prompts ejecutados en sesiones de Gemini Enterprise, clasificando intención laboral vs. no laboral y categoría funcional (con protección PII automática).</p>
+            <h2 data-i18n="dim_6_title">What types of prompts are users submitting? Are they using the application for work or other purposes?</h2>
+            <p class="card-sub" data-i18n="dim_6_sub">Real-time analysis of queries/prompts executed in Gemini Enterprise sessions, classifying work vs. non-work intent and functional business taxonomy (with automatic PII protection).</p>
           </div>
-          <span id="adoptQ6TotalBadge" class="table-badge">0 Prompts Analizados</span>
+          <span id="adoptQ6TotalBadge" class="table-badge">0 Prompts Analyzed</span>
         </div>
 
         <div class="charts-grid-2" style="margin-bottom: 16px;">
           <div class="adoption-chart-box">
-            <div class="sub-card-title">Distribución: Fines de Trabajo vs. Otros Fines</div>
+            <div class="sub-card-title" data-i18n="dim_6_chart_intent">Distribution: Work Purposes vs. Other Purposes</div>
             <div class="chart-container chart-sm">
               <canvas id="adoptWorkIntentChart"></canvas>
             </div>
           </div>
           <div class="adoption-chart-box">
-            <div class="sub-card-title">Taxonomía de Prompts por Categoría de Negocio</div>
+            <div class="sub-card-title" data-i18n="dim_6_chart_taxonomy">Prompt Taxonomy by Business Category</div>
             <div class="chart-container chart-sm">
               <canvas id="adoptPromptCategoryChart"></canvas>
             </div>
           </div>
         </div>
 
-        <div class="sub-card-title" style="margin-bottom: 8px;">Muestra de Prompts Reales Registrados en Sesiones (<span class="adopt-days-label">30</span>d)</div>
+        <div class="sub-card-title" style="margin-bottom: 8px;"><span data-i18n="dim_6_table_title">Sample of Real Recorded Session Prompts</span> (<span class="adopt-days-label">30</span>d)</div>
         <div class="table-scroll">
           <table class="gcp-table">
             <thead>
               <tr>
-                <th>Fecha / Hora</th>
-                <th>Usuario</th>
-                <th>Aplicación</th>
-                <th>Prompt / Consulta del Usuario</th>
-                <th>Clasificación</th>
-                <th>Categoría</th>
-                <th>Respuesta del Agente</th>
+                <th data-i18n="th_q6_time">Date / Time</th>
+                <th data-i18n="th_q3_agent">Agent</th>
+                <th data-i18n="th_q3_app">Application</th>
+                <th data-i18n="th_q6_prompt">User Prompt / Query</th>
+                <th data-i18n="th_q6_intent">Classification</th>
+                <th data-i18n="th_q6_category">Category</th>
+                <th data-i18n="th_q6_turns">Session Turns</th>
               </tr>
             </thead>
             <tbody id="adoptQ6PromptsTableBody"></tbody>
@@ -971,170 +1019,175 @@
     </div><!-- /#mainTabAdoption -->
 
     <!-- =================================================================== -->
-    <!-- TAB 3: SOLUTION ARCHITECTURE (DIAGRAMA CONCEPTUAL DE LA SOLUCIÓN)   -->
+    <!-- SOLUTION ARCHITECTURE VIEW (OPENED FROM BURGER MENU CONFIG)         -->
     <!-- =================================================================== -->
     <div id="mainTabArchitecture" class="main-tab-panel hidden">
       <section id="section-architecture" class="card arch-hero-card">
         <div class="card-header">
           <div>
             <div class="narrative-eyebrow">
-              <span class="ai-sparkle-badge">CONCEPTUAL ARCHITECTURE</span>
-              <span class="model-pill">Serverless &amp; Zero-Hardcoding</span>
-              <span class="tts-voice-pill">Google Cloud Native</span>
+              <span class="ai-sparkle-badge" data-i18n="arch_eyebrow_badge">CONCEPTUAL ARCHITECTURE</span>
+              <span class="model-pill" data-i18n="arch_pill_serverless">Serverless &amp; Zero-Hardcoding</span>
+              <span class="tts-voice-pill" data-i18n="arch_pill_native">Google Cloud Native</span>
             </div>
-            <h2>Arquitectura Conceptual de la Solución — Gemini Enterprise Smart Reports</h2>
-            <p class="card-sub">Vista conceptual de extremo a extremo de cómo la solución recolecta telemetría en vivo, correlaciona linaje y costos, aplica privacidad y genera reportes ejecutivos con voz natural.</p>
+            <h2 data-i18n="arch_hero_title">Solution Conceptual Architecture — Gemini Enterprise Smart Reports</h2>
+            <p class="card-sub" data-i18n="arch_hero_sub">End-to-end conceptual view of how the solution collects live telemetry, correlates lineage and spend, enforces privacy, and synthesizes executive briefings with natural voice.</p>
+          </div>
+          <div class="narrative-actions">
+            <button type="button" id="backToDashboardFromArchBtn" class="btn btn-secondary" data-i18n="arch_back_btn">
+              &larr; Back to Dashboard
+            </button>
           </div>
         </div>
 
-        <!-- Conceptual 5-Layer Architecture Diagram -->
+        <!-- Conceptual 5-Layer Architecture Diagram (Google 4-Color Palette) -->
         <div class="arch-diagram-wrapper">
-          <!-- Layer 1: Usuarios y Ecosistema -->
+          <!-- Layer 1: Experience Channels -->
           <div class="arch-stage">
-            <div class="arch-stage-badge">Capa 1 · Canales de Experiencia</div>
-            <div class="arch-stage-title">Usuarios &amp; Ecosistema Gemini</div>
+            <div class="arch-stage-badge" data-i18n="arch_l1_badge">Layer 1 · Experience Channels</div>
+            <div class="arch-stage-title" data-i18n="arch_l1_title">Users &amp; Gemini Ecosystem</div>
             <div class="arch-nodes-stack">
               <div class="arch-node arch-node-blue">
                 <div class="arch-node-icon">💬</div>
                 <div>
-                  <div class="arch-node-name">Aplicaciones Conversacionales</div>
-                  <div class="arch-node-desc">Búsqueda empresarial y asistentes de negocio</div>
+                  <div class="arch-node-name" data-i18n="arch_l1_n1_name">Conversational Applications</div>
+                  <div class="arch-node-desc" data-i18n="arch_l1_n1_desc">Enterprise search &amp; business assistants</div>
                 </div>
               </div>
               <div class="arch-node arch-node-blue">
                 <div class="arch-node-icon">🤖</div>
                 <div>
-                  <div class="arch-node-name">Agentes Especializados</div>
-                  <div class="arch-node-desc">Agentes autónomos, multi-agente y flujos de trabajo</div>
+                  <div class="arch-node-name" data-i18n="arch_l1_n2_name">Specialized Agents</div>
+                  <div class="arch-node-desc" data-i18n="arch_l1_n2_desc">Autonomous, multi-agent &amp; workflow agents</div>
                 </div>
               </div>
               <div class="arch-node arch-node-blue">
                 <div class="arch-node-icon">💻</div>
                 <div>
-                  <div class="arch-node-name">Herramientas de Productividad</div>
-                  <div class="arch-node-desc">Asistencia de código en IDE y entornos de desarrollo</div>
+                  <div class="arch-node-name" data-i18n="arch_l1_n3_name">Productivity Tools</div>
+                  <div class="arch-node-desc" data-i18n="arch_l1_n3_desc">IDE code assistance &amp; developer environments</div>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="arch-connector" aria-hidden="true">
-            <div class="arch-arrow-label">Eventos de Uso &amp; Consultas</div>
+            <div class="arch-arrow-label" data-i18n="arch_conn_1">Usage Events &amp; Queries</div>
             <div class="arch-arrow-line">&rarr;</div>
           </div>
 
-          <!-- Layer 2: Fuentes de Telemetría en Vivo -->
+          <!-- Layer 2: Live Telemetry Signal Sources -->
           <div class="arch-stage">
-            <div class="arch-stage-badge">Capa 2 · Fuentes de Señales</div>
-            <div class="arch-stage-title">APIs Nativas de Google Cloud</div>
+            <div class="arch-stage-badge" data-i18n="arch_l2_badge">Layer 2 · Signal Sources</div>
+            <div class="arch-stage-title" data-i18n="arch_l2_title">Native Google Cloud APIs</div>
             <div class="arch-nodes-stack">
-              <div class="arch-node arch-node-cyan">
+              <div class="arch-node arch-node-green">
                 <div class="arch-node-icon">🧭</div>
                 <div>
-                  <div class="arch-node-name">Catálogo de Motores, Agentes y Sesiones</div>
-                  <div class="arch-node-desc">Inventario de aplicaciones, conversaciones, turnos y conectores</div>
+                  <div class="arch-node-name" data-i18n="arch_l2_n1_name">Engines, Agents &amp; Sessions Catalog</div>
+                  <div class="arch-node-desc" data-i18n="arch_l2_n1_desc">Inventory of applications, conversations, turns &amp; connectors</div>
                 </div>
               </div>
-              <div class="arch-node arch-node-cyan">
+              <div class="arch-node arch-node-green">
                 <div class="arch-node-icon">🪪</div>
                 <div>
-                  <div class="arch-node-name">Gestión de Licencias e Identidades</div>
-                  <div class="arch-node-desc">Asignación de asientos, estado de activación y último acceso</div>
+                  <div class="arch-node-name" data-i18n="arch_l2_n2_name">License &amp; Identity Management</div>
+                  <div class="arch-node-desc" data-i18n="arch_l2_n2_desc">Seat assignments, activation state &amp; last login</div>
                 </div>
               </div>
-              <div class="arch-node arch-node-cyan">
+              <div class="arch-node arch-node-green">
                 <div class="arch-node-icon">📈</div>
                 <div>
-                  <div class="arch-node-name">Observabilidad y Consumo de Modelos</div>
-                  <div class="arch-node-desc">Métricas de tokens de entrada/salida, latencia y trazas de auditoría</div>
+                  <div class="arch-node-name" data-i18n="arch_l2_n3_name">Model Observability &amp; Consumption</div>
+                  <div class="arch-node-desc" data-i18n="arch_l2_n3_desc">Input/output token metrics, latency &amp; audit traces</div>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="arch-connector" aria-hidden="true">
-            <div class="arch-arrow-label">Descubrimiento en Tiempo Real</div>
+            <div class="arch-arrow-label" data-i18n="arch_conn_2">Real-Time Discovery</div>
             <div class="arch-arrow-line">&rarr;</div>
           </div>
 
-          <!-- Layer 3: Motor Inteligente de Correlación -->
+          <!-- Layer 3: Serverless Analytical Core -->
           <div class="arch-stage arch-stage-center">
-            <div class="arch-stage-badge">Capa 3 · Núcleo Analítico Serverless</div>
-            <div class="arch-stage-title">Motor de Correlación &amp; Gobernanza</div>
+            <div class="arch-stage-badge" data-i18n="arch_l3_badge">Layer 3 · Serverless Analytical Core</div>
+            <div class="arch-stage-title" data-i18n="arch_l3_title">Correlation &amp; Governance Engine</div>
             <div class="arch-nodes-stack">
-              <div class="arch-node arch-node-green">
+              <div class="arch-node arch-node-yellow">
                 <div class="arch-node-icon">🕸️</div>
                 <div>
-                  <div class="arch-node-name">Descubrimiento de Linaje Topológico</div>
-                  <div class="arch-node-desc">Mapeo automático entre orígenes de datos, almacenes, motores y agentes</div>
+                  <div class="arch-node-name" data-i18n="arch_l3_n1_name">Topological Lineage Discovery</div>
+                  <div class="arch-node-desc" data-i18n="arch_l3_n1_desc">Automated mapping across data stores, engines, agents &amp; runtimes</div>
                 </div>
               </div>
-              <div class="arch-node arch-node-green">
+              <div class="arch-node arch-node-yellow">
                 <div class="arch-node-icon">🛡️</div>
                 <div>
-                  <div class="arch-node-name">Clasificador de Intención &amp; Filtro de Privacidad</div>
-                  <div class="arch-node-desc">Enmascaramiento dinámico de identidades y clasificación laboral vs. general</div>
+                  <div class="arch-node-name" data-i18n="arch_l3_n2_name">Intent Classifier &amp; Privacy Guard</div>
+                  <div class="arch-node-desc" data-i18n="arch_l3_n2_desc">Dynamic identity masking &amp; work vs. non-work classification</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-yellow">
+                <div class="arch-node-icon">🧮</div>
+                <div>
+                  <div class="arch-node-name" data-i18n="arch_l3_n3_name">Transparent Cost &amp; ROI Engine</div>
+                  <div class="arch-node-desc" data-i18n="arch_l3_n3_desc">Auditable calculation of licenses, connectors &amp; model inference</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector" aria-hidden="true">
+            <div class="arch-arrow-label" data-i18n="arch_conn_3">Structured Context</div>
+            <div class="arch-arrow-line">&rarr;</div>
+          </div>
+
+          <!-- Layer 4: Generative Intelligence & Voice -->
+          <div class="arch-stage">
+            <div class="arch-stage-badge" data-i18n="arch_l4_badge">Layer 4 · AI Synthesis</div>
+            <div class="arch-stage-title" data-i18n="arch_l4_title">Next-Gen Gemini Models</div>
+            <div class="arch-nodes-stack">
+              <div class="arch-node arch-node-red">
+                <div class="arch-node-icon">✨</div>
+                <div>
+                  <div class="arch-node-name" data-i18n="arch_l4_n1_name">Executive Summary Generation</div>
+                  <div class="arch-node-desc" data-i18n="arch_l4_n1_desc">On-demand synthesis of top insights &amp; actionable recommendations</div>
+                </div>
+              </div>
+              <div class="arch-node arch-node-red">
+                <div class="arch-node-icon">🔊</div>
+                <div>
+                  <div class="arch-node-name" data-i18n="arch_l4_n2_name">Expressive Voice Narration</div>
+                  <div class="arch-node-desc" data-i18n="arch_l4_n2_desc">Natural spoken briefing of the executive report with neural voices</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-connector" aria-hidden="true">
+            <div class="arch-arrow-label" data-i18n="arch_conn_4">Interactive Visualization</div>
+            <div class="arch-arrow-line">&rarr;</div>
+          </div>
+
+          <!-- Layer 5: Admin Experience -->
+          <div class="arch-stage">
+            <div class="arch-stage-badge" data-i18n="arch_l5_badge">Layer 5 · Presentation</div>
+            <div class="arch-stage-title" data-i18n="arch_l5_title">Smart Reports Executive Portal</div>
+            <div class="arch-nodes-stack">
+              <div class="arch-node arch-node-blue">
+                <div class="arch-node-icon">📊</div>
+                <div>
+                  <div class="arch-node-name" data-i18n="arch_l5_n1_name">Executive &amp; Lineage Dashboard</div>
+                  <div class="arch-node-desc" data-i18n="arch_l5_n1_desc">Financial KPIs, model consumption &amp; interactive end-to-end graph</div>
                 </div>
               </div>
               <div class="arch-node arch-node-green">
-                <div class="arch-node-icon">🧮</div>
-                <div>
-                  <div class="arch-node-name">Motor Transparente de Costos y ROI</div>
-                  <div class="arch-node-desc">Cálculo auditable de licencias, indexación e inferencia de modelos</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="arch-connector" aria-hidden="true">
-            <div class="arch-arrow-label">Contexto Estructurado</div>
-            <div class="arch-arrow-line">&rarr;</div>
-          </div>
-
-          <!-- Layer 4: Inteligencia Generativa & Voz -->
-          <div class="arch-stage">
-            <div class="arch-stage-badge">Capa 4 · Síntesis con IA</div>
-            <div class="arch-stage-title">Modelos Gemini de Última Generación</div>
-            <div class="arch-nodes-stack">
-              <div class="arch-node arch-node-yellow">
-                <div class="arch-node-icon">✨</div>
-                <div>
-                  <div class="arch-node-name">Generación de Resumen Ejecutivo</div>
-                  <div class="arch-node-desc">Síntesis bajo demanda de hallazgos críticos y recomendaciones accionables</div>
-                </div>
-              </div>
-              <div class="arch-node arch-node-yellow">
-                <div class="arch-node-icon">🔊</div>
-                <div>
-                  <div class="arch-node-name">Narración de Voz Expresiva</div>
-                  <div class="arch-node-desc">Lectura hablada natural del reporte ejecutivo con voces expresivas</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="arch-connector" aria-hidden="true">
-            <div class="arch-arrow-label">Visualización Interactiva</div>
-            <div class="arch-arrow-line">&rarr;</div>
-          </div>
-
-          <!-- Layer 5: Experiencia del Administrador -->
-          <div class="arch-stage">
-            <div class="arch-stage-badge">Capa 5 · Presentación</div>
-            <div class="arch-stage-title">Portal Ejecutivo Smart Reports</div>
-            <div class="arch-nodes-stack">
-              <div class="arch-node arch-node-purple">
-                <div class="arch-node-icon">📊</div>
-                <div>
-                  <div class="arch-node-name">Dashboard Ejecutivo &amp; Linaje</div>
-                  <div class="arch-node-desc">KPIs financieros, consumo por modelo y grafo interactivo de extremo a extremo</div>
-                </div>
-              </div>
-              <div class="arch-node arch-node-purple">
                 <div class="arch-node-icon">👥</div>
                 <div>
-                  <div class="arch-node-name">Centro de Telemetría y Adopción</div>
-                  <div class="arch-node-desc">Visibilidad de usuarios activos, asientos inactivos, apps, agentes y prompts</div>
+                  <div class="arch-node-name" data-i18n="arch_l5_n2_name">Telemetry &amp; Adoption Center (6 Dimensions)</div>
+                  <div class="arch-node-desc" data-i18n="arch_l5_n2_desc">Visibility into active users, dormant seats, apps, agents &amp; prompts</div>
                 </div>
               </div>
             </div>
@@ -1143,21 +1196,21 @@
 
         <!-- 4 Architectural Pillars Summary -->
         <div class="arch-pillars-grid">
-          <div class="arch-pillar-card">
-            <div class="arch-pillar-title">1. Cero Datos Cableados (100% Live)</div>
-            <p>La aplicación no depende de bases de datos intermedias manuales ni datos estáticos: interroga directamente los servicios de control y observabilidad de la nube en tiempo real.</p>
+          <div class="arch-pillar-card pillar-blue">
+            <div class="arch-pillar-title" data-i18n="arch_p1_title">1. Zero Hardcoded Data (100% Live)</div>
+            <p data-i18n="arch_p1_desc">The application relies on zero static files or manual staging tables: it queries Google Cloud control and observability APIs in real time.</p>
           </div>
-          <div class="arch-pillar-card">
-            <div class="arch-pillar-title">2. Privacidad y Gobernanza por Diseño</div>
-            <p>Las identidades de los usuarios y el contenido de las consultas se presentan protegidos por defecto, permitiendo al Administrador alternar la vista auditada según sus permisos.</p>
+          <div class="arch-pillar-card pillar-red">
+            <div class="arch-pillar-title" data-i18n="arch_p2_title">2. Privacy &amp; Governance by Design</div>
+            <p data-i18n="arch_p2_desc">User identities and prompt contents are masked by default, allowing authorized Administrators to toggle audited visibility on demand.</p>
           </div>
-          <div class="arch-pillar-card">
-            <div class="arch-pillar-title">3. Despliegue Ligero sin Servidores</div>
-            <p>Empaquetado como un contenedor ligero auto-contenido que escala automáticamente a cero y utiliza la identidad nativa del entorno sin almacenar llaves ni secretos.</p>
+          <div class="arch-pillar-card pillar-yellow">
+            <div class="arch-pillar-title" data-i18n="arch_p3_title">3. Lightweight Serverless Deployment</div>
+            <p data-i18n="arch_p3_desc">Packaged as a self-contained Cloud Run container that scales automatically to zero and uses native workload identity without storing keys.</p>
           </div>
-          <div class="arch-pillar-card">
-            <div class="arch-pillar-title">4. Transparencia Financiera y Operativa</div>
-            <p>Cada dólar estimado y cada recomendación operativa se vinculan de forma transparente con el uso de licencias, el volumen de datos indexados y el consumo de tokens.</p>
+          <div class="arch-pillar-card pillar-green">
+            <div class="arch-pillar-title" data-i18n="arch_p4_title">4. Financial &amp; Operational Transparency</div>
+            <p data-i18n="arch_p4_desc">Every estimated dollar and operational recommendation links transparently to license utilization, active connectors, and live token volume.</p>
           </div>
         </div>
       </section>
@@ -1165,6 +1218,6 @@
   </main>
 
   <div id="toastBanner" class="toast hidden"></div>
-  <script src="/static/app.js?v=3.3.1"></script>
+  <script src="/static/app.js?v=3.4.0"></script>
 </body>
 </html>

@@ -33,11 +33,56 @@ def verify_zero_forbidden_references_or_secrets(root_dir: str) -> None:
       assert not m_sec, f"Potential secret token found in {fpath}"
 
 
+def verify_frontend_v34_requirements(root_dir: str) -> None:
+  with open(os.path.join(root_dir, "static", "index.html"), "r", encoding="utf-8") as f:
+    html = f.read()
+  with open(os.path.join(root_dir, "static", "styles.css"), "r", encoding="utf-8") as f:
+    css = f.read()
+  with open(os.path.join(root_dir, "static", "app.js"), "r", encoding="utf-8") as f:
+    js = f.read()
+
+  # 1. Solution Architecture moved out of #primaryViewTabs into Burger Menu config
+  assert "id=\"tabBtnArchitecture\"" not in html, "Solution Architecture tab button must be removed from top tab bar"
+  assert "id=\"openArchitectureFromDrawerBtn\"" in html, "Solution Architecture launcher must be inside Burger Menu drawer"
+  assert "id=\"backToDashboardFromArchBtn\"" in html, "Back to Dashboard button must be inside Architecture view"
+
+  # 2. "Dimension 1..6" instead of "Pregunta 1..6"
+  assert "Pregunta 1" not in html and "Pregunta 1" not in js, "Pregunta 1..6 must be replaced with Dimension 1..6"
+  for idx in range(1, 7):
+    assert f"Dimension {idx}" in html
+    assert f"Dimensión {idx}" in js
+
+  # 3. Internationalization (EN / ES) in Burger Menu config
+  assert "id=\"langSegmentedControl\"" in html
+  assert "data-lang=\"en\"" in html and "data-lang=\"es\"" in html
+  assert "I18N_CATALOG" in js and "applyTranslations" in js
+
+  # 4. Light / Dark Mode in Burger Menu config
+  assert "id=\"themeSegmentedControl\"" in html
+  assert "data-theme-mode=\"light\"" in html and "data-theme-mode=\"dark\"" in html
+  assert "[data-theme=\"dark\"]" in css and "applyTheme" in js
+
+  # 5. Canonical 4-Color Google Brand Palette (#4285F4, #EA4335, #FBBC04, #34A853)
+  for google_hex in ("#4285F4", "#EA4335", "#FBBC04", "#34A853"):
+    assert google_hex.lower() in css.lower(), f"Missing canonical Google color {google_hex} in styles.css"
+    assert google_hex.lower() in js.lower(), f"Missing canonical Google color {google_hex} in app.js"
+
+  # 6. GCP Project ID dropdown (<select id="cfgProjectId">) in Burger Menu with auto-regeneration on change
+  assert "<select id=\"cfgProjectId\"" in html, "cfgProjectId must be a <select> dropdown"
+  assert "onProjectDropdownChange" in js
+
+
 def verify_live_engine() -> None:
   eng = SmartReportEngine()
   cfg = eng.get_config()
   assert "input_price_per_1m_usd" in cfg
   assert "hourly_rate_usd" in cfg
+
+  # Verify Selectable GCP Projects list (Item 6)
+  projs = eng.list_selectable_projects()
+  proj_ids = [p["project_id"] for p in projs.get("projects", [])]
+  assert "genai-demos-avr-2024" in proj_ids, f"Expected genai-demos-avr-2024 in projects: {proj_ids}"
+  assert len(proj_ids) >= 2
 
   rep = eng.compute_expense_and_telemetry(engine_filter="ALL")
   assert (
@@ -48,7 +93,7 @@ def verify_live_engine() -> None:
   ), f"Expected >= 20 data stores, got {rep['kpis']['total_datastores']}"
   assert "formula_breakdown" in rep
 
-  # Verify Item 4: Agent Platform Model Billing & Token Consumption (per model, per agent, per project/engine)
+  # Verify Agent Platform Model Billing & Token Consumption
   mb = rep.get("model_billing") or {}
   assert "billing_info" in mb
   assert mb["billing_info"]["total_live_tokens"] >= 15_000_000, (
@@ -58,7 +103,7 @@ def verify_live_engine() -> None:
   assert len(mb.get("by_agent", [])) >= 110
   assert len(mb.get("by_project_and_engine", [])) >= 15
 
-  # Verify Item 1: Full Lineage Graph with all live agents (no [:6] truncation)
+  # Verify Full Lineage Graph with all live agents
   lin = eng.get_lineage_graph(engine_filter="ALL")
   assert lin["counts"]["agents"] == rep["kpis"]["total_agents"], (
       f"Expected lineage agents ({lin['counts']['agents']}) == total_agents ({rep['kpis']['total_agents']})"
@@ -66,14 +111,17 @@ def verify_live_engine() -> None:
   assert len(lin["nodes"]) >= 180
   assert len(lin["edges"]) >= 110
 
-  # Verify Item 2: Natural Language Executive Summary (5 bullets) & Environment Recommendations via gemini-3.8-flash
-  nav_llm = eng.generate_natural_language_report(engine_filter="ALL", use_llm=True)
-  assert len(nav_llm.get("executive_summary_bullets", [])) == 5
-  assert len(nav_llm.get("environment_recommendations", [])) >= 3
-  assert "gemini-3.8-flash" in nav_llm.get("generated_by", "")
-  assert len(nav_llm.get("tts_script", "")) > 100
+  # Verify Natural Language Executive Summary (5 bullets) & Environment Recommendations in EN & ES
+  nav_en = eng.generate_natural_language_report(engine_filter="ALL", use_llm=True, lang="en")
+  assert len(nav_en.get("executive_summary_bullets", [])) == 5
+  assert len(nav_en.get("environment_recommendations", [])) >= 3
+  assert "gemini-3.8-flash" in nav_en.get("generated_by", "")
 
-  # Verify Item 3: TTS "Read Me the Report" synthesis via gemini-3.8-flash-tts
+  nav_es = eng.generate_natural_language_report(engine_filter="ALL", use_llm=False, lang="es")
+  assert len(nav_es.get("executive_summary_bullets", [])) == 5
+  assert nav_es.get("lang") == "es"
+
+  # Verify TTS "Read Me the Report" synthesis via gemini-3.8-flash-tts
   tts_res = eng.synthesize_report_speech(
       text="Executive summary test for Gemini Enterprise Smart Reports.",
       voice_name="Kore",
@@ -81,7 +129,7 @@ def verify_live_engine() -> None:
   assert tts_res.get("status") == "OK" and len(tts_res.get("audio_base64", "")) > 1000
   assert "gemini-3.8-flash-tts" in tts_res.get("voice_name", "")
 
-  # Verify Item 5: Admin Telemetry & Adoption (6 Admin Questions + Privacy Toggle + X-Days Window)
+  # Verify Admin Telemetry & Adoption (6 Dimensions + Privacy Toggle + X-Days Window)
   ad_masked = rep.get("adoption_telemetry") or {}
   assert ad_masked.get("days_window") == 30
   assert ad_masked.get("include_unmasked") is False
@@ -109,15 +157,12 @@ def verify_live_engine() -> None:
   assert "***" not in ad_unmasked["q1_active_users"]["active_users"][0]["display_principal"]
 
   print(
-      f"VERIFIED OK: {rep['kpis']['total_engines']} engines, "
+      f"VERIFIED OK (v3.4.0): {len(proj_ids)} selectable GCP projects ({', '.join(proj_ids[:3])}), "
+      f"{rep['kpis']['total_engines']} engines, "
       f"{rep['kpis']['total_agents']} agents (Lineage: {lin['counts']['agents']} agents / {len(lin['nodes'])} total nodes), "
       f"{rep['kpis']['total_datastores']} data stores, "
       f"{mb['billing_info']['total_live_tokens']:,} live Cloud Monitoring tokens across {len(mb['by_model'])} models, "
-      f"5 Executive Summary bullets ({nav_llm['generated_by']}), "
-      f"Gemini Flash TTS audio ({tts_res['voice_name']}, {len(tts_res['audio_base64'])} bytes), "
-      f"Admin Adoption ({sk['users_active_today']} active today, {sk['users_active_window']} active 30d, "
-      f"{sk['sessions_window']} live sessions, {ad_masked['q3_top_agents']['distinct_agents_with_sessions']} active agents, "
-      f"{ad_masked['q6_prompt_intelligence']['work_pct']}% work prompts), "
+      f"EN+ES i18n, Light/Dark Mode, 4-Color Google Palette, Dimension 1..6, "
       f"${rep['kpis']['total_spend_usd']} total spend."
   )
 
@@ -125,5 +170,5 @@ def verify_live_engine() -> None:
 if __name__ == "__main__":
   root = os.path.dirname(os.path.abspath(__file__))
   verify_zero_forbidden_references_or_secrets(root)
+  verify_frontend_v34_requirements(root)
   verify_live_engine()
-

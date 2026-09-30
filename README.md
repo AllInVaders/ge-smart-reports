@@ -7,7 +7,7 @@ A lightweight **Google Cloud Run** dashboard that provides live usage analytics,
 ## Features
 
 - **Executive Summary & AI Recommendations (`gemini-3.8-flash`)**  
-  Generates an on-demand 5-bullet Executive Summary and prioritized technical & FinOps recommendations tailored to your live GCP environment.
+  Generates an on-demand 5-bullet Executive Summary and prioritized technical & FinOps recommendations tailored to your live GCP environment (in English or Spanish).
 
 - **"Read Me the Report" Audio Briefing (`gemini-3.8-flash-tts`)**  
   Converts the executive report into natural, expressive speech with multiple voice personas (`Kore`, `Charon`, `Aoede`, `Puck`, `Fenrir`) and playback speed controls.
@@ -24,14 +24,11 @@ A lightweight **Google Cloud Run** dashboard that provides live usage analytics,
 - **Data Stores, Agents & License Governance**  
   Provides searchable live inventories of connected data stores, MCP servers, registered agents (`Low-Code`, `ADK`, `Skill`, `Workflow`, `A2A`), user seat assignments, and detected operational frictions.
 
-- **Configurable Expense & ROI Formula (`ƒx Understand Expense`)**  
-  Built-in configuration drawer (`☰`) to customize token pricing, connector costs, seat rates, and productivity savings assumptions in real time.
+- **Admin Telemetry & Adoption Tab (`6 Dimensions`)**  
+  Answers the 6 core Admin adoption dimensions (`Dimension 1`–`Dimension 6`) across any custom $X$-day window (`1d` to `365d`) with a one-click privacy toggle (masked vs. full Admin view): active users today and in $X$ days, top applications, top agents, dormant/reclaimable licenses, ecosystem capability usage (Gemini Code Assist, Google Antigravity / ADK, multimodal tools), and work vs. non-work prompt classification.
 
-- **Admin Telemetry & Adoption Tab (`Telemetría y Adopción`)**  
-  Answers the 6 core Admin adoption questions across any custom $X$-day window (`1d` to `365d`) with a one-click privacy toggle (masked vs. full Admin view): active users today and in $X$ days, top applications, top agents, dormant/reclaimable licenses, ecosystem capability usage (Gemini Code Assist, Google Antigravity / ADK, multimodal tools), and work vs. non-work prompt classification.
-
-- **Conceptual Solution Architecture Tab**  
-  End-to-end 5-layer conceptual architecture diagram illustrating how live telemetry, correlation, privacy governance, and generative AI synthesis work together.
+- **Burger Menu Configuration (`☰`) — Multi-Project Switcher, i18n, Theme, Expense Formula & Architecture**  
+  Includes a live **GCP Project dropdown** that automatically regenerates the report on project change, **English / Spanish (`i18n`)** language switching, **Light / Dark Mode**, the **5-layer Conceptual Solution Architecture** diagram, and customizable **Live Expense Formula** coefficients (`ƒx Understand Expense`).
 
 ---
 

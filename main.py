@@ -30,7 +30,7 @@ if HAS_FASTAPI:
           "Open-source, 100% live Discovery Engine API, Cloud Monitoring Token Billing,"
           " Natural Language Executive Summary (gemini-3.8-flash), TTS (gemini-3.8-flash-tts) & Lineage Reporting Dashboard."
       ),
-      version="3.3.1",
+      version="3.4.0",
   )
   app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -43,8 +43,12 @@ if HAS_FASTAPI:
     return JSONResponse({
         "status": "ok",
         "project_id": engine.project_id,
-        "version": "3.3.1",
+        "version": "3.4.0",
     })
+
+  @app.get("/api/projects")
+  async def api_projects() -> JSONResponse:
+    return JSONResponse(engine.list_selectable_projects())
 
   @app.get("/api/report")
   async def api_report(
@@ -82,9 +86,10 @@ if HAS_FASTAPI:
   async def api_narrative_get(
       engine_id: str = Query(default="ALL"),
       use_llm: bool = Query(default=True),
+      lang: str = Query(default="en"),
   ) -> JSONResponse:
     data = engine.generate_natural_language_report(
-        engine_filter=engine_id, use_llm=use_llm
+        engine_filter=engine_id, use_llm=use_llm, lang=lang
     )
     return JSONResponse(data)
 
@@ -93,8 +98,9 @@ if HAS_FASTAPI:
     payload: dict[str, Any] = await req.json()
     eid = str(payload.get("engine_id") or "ALL")
     use_llm = bool(payload.get("use_llm", True))
+    lang = str(payload.get("lang") or "en")
     data = engine.generate_natural_language_report(
-        engine_filter=eid, use_llm=use_llm
+        engine_filter=eid, use_llm=use_llm, lang=lang
     )
     return JSONResponse(data)
 
@@ -138,8 +144,11 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
 
     if path == "/api/health":
       self._send_json(
-          {"status": "ok", "project_id": engine.project_id, "version": "3.3.1"}
+          {"status": "ok", "project_id": engine.project_id, "version": "3.4.0"}
       )
+      return
+    if path == "/api/projects":
+      self._send_json(engine.list_selectable_projects())
       return
     if path == "/api/report":
       eid = (qs.get("engine_id") or ["ALL"])[0]
@@ -174,9 +183,10 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
     if path == "/api/narrative":
       eid = (qs.get("engine_id") or ["ALL"])[0]
       use_llm = (qs.get("use_llm") or ["true"])[0].lower() == "true"
+      lang = (qs.get("lang") or ["en"])[0]
       self._send_json(
           engine.generate_natural_language_report(
-              engine_filter=eid, use_llm=use_llm
+              engine_filter=eid, use_llm=use_llm, lang=lang
           )
       )
       return
@@ -218,9 +228,10 @@ class _StdlibHandler(SimpleHTTPRequestHandler):
     if parsed.path == "/api/narrative":
       eid = str(payload.get("engine_id") or "ALL")
       use_llm = bool(payload.get("use_llm", True))
+      lang = str(payload.get("lang") or "en")
       self._send_json(
           engine.generate_natural_language_report(
-              engine_filter=eid, use_llm=use_llm
+              engine_filter=eid, use_llm=use_llm, lang=lang
           )
       )
       return
